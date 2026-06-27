@@ -30,11 +30,28 @@ so you can validate everything before risking a cent.
 ```bash
 pip install -r requirements.txt
 cp .env.example .env          # MODE=paper by default
-python run.py
+python run.py                 # headless
+# — or, with the web dashboard —
+python webapp.py              # open http://localhost:8000
 ```
 
-It starts trading on simulated money using **real live prices**. Watch the log and
-the trade ledger at `logs/trades.csv`.
+It trades on simulated money using **real live prices**. Watch the log, the trade
+ledger at `logs/trades.csv`, or the dashboard.
+
+## Web dashboard
+
+```bash
+python webapp.py --port 8000            # start/stop from the browser
+python webapp.py --autostart            # also start trading on launch
+```
+
+Open <http://localhost:8000>. The dashboard shows mode (paper/live), running state,
+equity / cash / realized PnL, live prices + current signals, open positions with
+unrealized PnL, and recent trades — and has **Start / Stop** buttons. The bot runs
+in a background thread inside the same process, so it's a single thing to deploy.
+
+> Bind to `127.0.0.1` (default) or put it behind an authenticated reverse proxy.
+> Never expose the dashboard publicly without auth, especially in live mode.
 
 ## Going live (real money — only after paper looks good)
 
@@ -94,13 +111,27 @@ tests/                         pytest suite
 python -m pytest -q
 ```
 
+## Fees: the scalper's #1 enemy
+
+Round-trip taker fees on spot are ~0.15%. If your average trade tries to capture
+less than that, fees quietly eat you alive. How this project fights back, and what
+to do next:
+
+1. **Maker/limit orders instead of market** (biggest win — on the roadmap). Post-only
+   limit entries pay the lower maker fee instead of the taker fee.
+2. **Stake CRO** for a lower fee tier on crypto.com.
+3. **Fewer, higher-quality trades** with a bigger target. `strategy.min_edge` and the
+   take-profit/stop ratio in `config.yaml` enforce a net-of-fee edge; raise the
+   timeframe to `5m` to capture larger moves per trade.
+4. Tune `fees.taker_fee` / `fees.maker_fee` to *your* actual tier so sizing is honest.
+
 ## Roadmap / not-yet-done
 
+- **Maker (limit) order execution** — pay maker not taker fees. Top priority for live.
 - WebSocket feed for lower-latency fills (current MVP polls REST).
-- Maker (limit) entries to pay lower fees — big deal for scalping.
 - Backtester over historical candles before paper.
 - Position reconciliation against the exchange on restart.
-- Telegram/Discord alerts.
+- Dashboard authentication for safe remote access.
 
 ## Disclaimer
 

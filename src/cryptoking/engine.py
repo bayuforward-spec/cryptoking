@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 import time
 from datetime import datetime, timezone
 
@@ -34,6 +35,17 @@ class Engine:
         # entry cost basis per instrument, for realized PnL accounting
         self._cost_basis: dict[str, float] = {}
 
+        # --- live state for the web dashboard ---
+        self._lock = threading.Lock()
+        self._stop = threading.Event()
+        self.started_at: str | None = None
+        self.last_update: str | None = None
+        self.last_error: str | None = None
+        self.steps = 0
+        self.trades_count = 0
+        self.last_signals: dict[str, dict] = {}
+        self.last_prices: dict[str, float] = {}
+
     def _build_broker(self) -> Broker:
         if self.cfg.is_live:
             log.warning("⚠️  LIVE MODE — real orders with real money.")
@@ -57,16 +69,28 @@ class Engine:
         )
         prices = self._mark_prices()
         self.risk.start_day(self.broker.equity(prices))
+        self.started_at = datetime.now(timezone.utc).isoformat()
+        self._stop.clear()
 
-        while True:
+        while not self._stop.is_set():
             try:
                 self.step()
             except KeyboardInterrupt:
                 log.info("Interrupted — shutting down.")
                 break
             except Exception as exc:  # never let one bad loop kill the bot
+                self.last_error = str(exc)
                 log.exception("Loop error: %s", exc)
-            time.sleep(self.cfg.engine.poll_interval_seconds)
+            # Sleep in small slices so stop() is responsive.
+            self._stop.wait(self.cfg.engine.poll_interval_seconds)
+
+    def stop(self) -> None:
+        """Signal the run loop to exit after the current iteration."""
+        self._stop.set()
+
+    @property
+    def is_running(self) -> bool:
+        return self.started_at is not None and not self._stop.is_set()
 
     def step(self) -> None:
         """One evaluation pass across all instruments. Separated for testing."""
@@ -81,6 +105,11 @@ class Engine:
 
             pos = self.broker.get_position(inst)
             signal = self.strategy.evaluate(candles, quote, in_position=pos is not None)
+            self.last_signals[inst] = {
+                "action": signal.action,
+                "reason": signal.reason,
+                "meta": signal.meta,
+            }
 
             if pos is not None:
                 # Risk-based exits take priority over strategy exits.
@@ -107,6 +136,46 @@ class Engine:
         if self.risk.halted:
             log.warning("Daily loss kill switch ACTIVE — no new entries today.")
 
+        with self._lock:
+            self.last_prices = prices
+            self.last_update = datetime.now(timezone.utc).isoformat()
+            self.steps += 1
+
+    def snapshot(self) -> dict:
+        """Thread-safe view of bot state for the web dashboard."""
+        with self._lock:
+            prices = dict(self.last_prices)
+            positions = []
+            for pos in self.broker.open_positions():
+                px = prices.get(pos.instrument, pos.entry_price)
+                positions.append(
+                    {
+                        "instrument": pos.instrument,
+                        "quantity": pos.quantity,
+                        "entry_price": pos.entry_price,
+                        "current_price": px,
+                        "unrealized_pnl": pos.unrealized_pnl(px),
+                    }
+                )
+            return {
+                "mode": self.cfg.mode,
+                "running": self.is_running,
+                "halted": self.risk.halted,
+                "started_at": self.started_at,
+                "last_update": self.last_update,
+                "last_error": self.last_error,
+                "steps": self.steps,
+                "trades_count": self.trades_count,
+                "strategy": self.cfg.strategy.name,
+                "instruments": self.cfg.engine.instruments,
+                "cash": self.broker.cash(),
+                "equity": self.broker.equity(prices),
+                "realized_pnl": self.realized_pnl,
+                "prices": prices,
+                "positions": positions,
+                "signals": dict(self.last_signals),
+            }
+
     # ----------------------- order helpers -----------------------
 
     def _open(self, inst: str, quote_amount: float, price: float, reason: str) -> None:
@@ -131,6 +200,7 @@ class Engine:
         )
 
     def _record(self, fill: Fill, realized: float) -> None:
+        self.trades_count += 1
         self.ledger.record(
             {
                 "timestamp": datetime.now(timezone.utc).isoformat(),

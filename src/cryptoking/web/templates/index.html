@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>👑 CryptoKing</title>
+<style>
+  :root {
+    --bg: #0c0f17; --panel: #151a26; --panel2: #1b2233; --line: #232b3d;
+    --text: #e6e9f0; --muted: #8a93a8; --green: #2ec27e; --red: #ff5c6c;
+    --accent: #f5b301; --blue: #4c8dff;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, Segoe UI, Roboto, sans-serif;
+         background: var(--bg); color: var(--text); }
+  header { display: flex; align-items: center; justify-content: space-between;
+           padding: 16px 24px; border-bottom: 1px solid var(--line); flex-wrap: wrap; gap: 12px; }
+  h1 { font-size: 20px; margin: 0; }
+  .controls { display: flex; gap: 8px; align-items: center; }
+  .badge { padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+  .badge.paper { background: #1f3a2e; color: var(--green); }
+  .badge.live  { background: #3a1f25; color: var(--red); }
+  .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+  .dot.on { background: var(--green); box-shadow: 0 0 8px var(--green); }
+  .dot.off { background: var(--muted); }
+  button { border: 1px solid var(--line); background: var(--panel2); color: var(--text);
+           padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 600; }
+  button:hover { border-color: var(--blue); }
+  button.start { color: var(--green); } button.stop { color: var(--red); }
+  main { padding: 24px; max-width: 1100px; margin: 0 auto; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+  .card .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .5px; }
+  .card .value { font-size: 26px; font-weight: 700; margin-top: 6px; }
+  .pos { color: var(--green); } .neg { color: var(--red); }
+  section { margin-top: 28px; }
+  section h2 { font-size: 14px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .sig { font-weight: 700; }
+  .sig.BUY { color: var(--green); } .sig.SELL { color: var(--red); } .sig.HOLD { color: var(--muted); }
+  .empty { color: var(--muted); padding: 16px 0; }
+  .warn { background: #3a2a12; color: var(--accent); padding: 10px 14px; border-radius: 8px;
+          margin-bottom: 16px; display: none; }
+  .ts { color: var(--muted); font-size: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>👑 CryptoKing <span class="ts" id="updated"></span></h1>
+  <div class="controls">
+    <span id="modeBadge" class="badge paper">PAPER</span>
+    <span><span id="runDot" class="dot off"></span><span id="runText">stopped</span></span>
+    <button class="start" onclick="post('/api/start')">▶ Start</button>
+    <button class="stop" onclick="post('/api/stop')">■ Stop</button>
+  </div>
+</header>
+
+<main>
+  <div id="haltWarn" class="warn">⚠️ Daily loss kill switch is ACTIVE — no new entries today.</div>
+
+  <div class="cards">
+    <div class="card"><div class="label">Equity</div><div class="value" id="equity">—</div></div>
+    <div class="card"><div class="label">Cash</div><div class="value" id="cash">—</div></div>
+    <div class="card"><div class="label">Realized PnL</div><div class="value" id="pnl">—</div></div>
+    <div class="card"><div class="label">Open positions</div><div class="value" id="posCount">—</div></div>
+    <div class="card"><div class="label">Steps / Trades</div><div class="value" id="steps">—</div></div>
+  </div>
+
+  <section>
+    <h2>Market & Signals</h2>
+    <table>
+      <thead><tr><th>Instrument</th><th class="num">Price</th><th>Signal</th><th>Reason</th><th class="num">RSI</th></tr></thead>
+      <tbody id="signals"><tr><td colspan="5" class="empty">waiting for data…</td></tr></tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Open Positions</h2>
+    <table>
+      <thead><tr><th>Instrument</th><th class="num">Qty</th><th class="num">Entry</th><th class="num">Now</th><th class="num">Unrealized</th></tr></thead>
+      <tbody id="positions"><tr><td colspan="5" class="empty">no open positions</td></tr></tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Recent Trades</h2>
+    <table>
+      <thead><tr><th>Time (UTC)</th><th>Side</th><th>Instrument</th><th class="num">Qty</th><th class="num">Price</th><th class="num">PnL</th><th>Reason</th></tr></thead>
+      <tbody id="trades"><tr><td colspan="7" class="empty">no trades yet</td></tr></tbody>
+    </table>
+  </section>
+</main>
+
+<script>
+const fmt = (n, d=2) => (n === null || n === undefined || n === "") ? "—" : Number(n).toLocaleString(undefined, {minimumFractionDigits: d, maximumFractionDigits: d});
+const cls = n => Number(n) > 0 ? "pos" : Number(n) < 0 ? "neg" : "";
+
+async function post(url){ try { await fetch(url, {method:"POST"}); refresh(); } catch(e){} }
+
+async function refresh(){
+  try {
+    const s = await (await fetch("/api/status")).json();
+    document.getElementById("updated").textContent = s.last_update ? "· updated " + new Date(s.last_update).toLocaleTimeString() : "";
+    const badge = document.getElementById("modeBadge");
+    badge.textContent = (s.mode||"").toUpperCase(); badge.className = "badge " + (s.mode==="live"?"live":"paper");
+    document.getElementById("runDot").className = "dot " + (s.running ? "on":"off");
+    document.getElementById("runText").textContent = s.running ? "running" : "stopped";
+    document.getElementById("haltWarn").style.display = s.halted ? "block" : "none";
+
+    document.getElementById("equity").textContent = "$" + fmt(s.equity);
+    document.getElementById("cash").textContent = "$" + fmt(s.cash);
+    const pnl = document.getElementById("pnl");
+    pnl.textContent = (s.realized_pnl>=0?"+":"") + "$" + fmt(s.realized_pnl); pnl.className = "value " + cls(s.realized_pnl);
+    document.getElementById("posCount").textContent = (s.positions||[]).length;
+    document.getElementById("steps").textContent = (s.steps||0) + " / " + (s.trades_count||0);
+
+    const sig = s.signals||{};
+    const sigRows = (s.instruments||[]).map(i => {
+      const d = sig[i]||{}; const m = d.meta||{};
+      return `<tr><td>${i}</td><td class="num">${s.prices&&s.prices[i]?fmt(s.prices[i]):"—"}</td>
+        <td class="sig ${d.action||"HOLD"}">${d.action||"—"}</td><td>${d.reason||""}</td>
+        <td class="num">${m.rsi!==undefined?fmt(m.rsi,1):"—"}</td></tr>`;
+    }).join("");
+    document.getElementById("signals").innerHTML = sigRows || `<tr><td colspan="5" class="empty">waiting…</td></tr>`;
+
+    const posRows = (s.positions||[]).map(p =>
+      `<tr><td>${p.instrument}</td><td class="num">${fmt(p.quantity,6)}</td><td class="num">${fmt(p.entry_price)}</td>
+       <td class="num">${fmt(p.current_price)}</td><td class="num ${cls(p.unrealized_pnl)}">${fmt(p.unrealized_pnl,4)}</td></tr>`).join("");
+    document.getElementById("positions").innerHTML = posRows || `<tr><td colspan="5" class="empty">no open positions</td></tr>`;
+
+    const trades = await (await fetch("/api/trades")).json();
+    const tRows = trades.map(t =>
+      `<tr><td class="ts">${(t.timestamp||"").replace("T"," ").slice(0,19)}</td>
+       <td class="sig ${t.side}">${t.side}</td><td>${t.instrument}</td>
+       <td class="num">${fmt(t.quantity,6)}</td><td class="num">${fmt(t.price)}</td>
+       <td class="num ${cls(t.realized_pnl)}">${fmt(t.realized_pnl,4)}</td><td>${t.reason||""}</td></tr>`).join("");
+    document.getElementById("trades").innerHTML = tRows || `<tr><td colspan="7" class="empty">no trades yet</td></tr>`;
+  } catch(e){ /* keep last view on transient errors */ }
+}
+refresh();
+setInterval(refresh, 3000);
+</script>
+</body>
+</html>
