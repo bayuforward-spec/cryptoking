@@ -1,0 +1,28 @@
+# Secrets — NEVER commit API keys
+.env
+.env.*
+!.env.example
+*.key
+secrets.*
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+
+# Runtime data
+logs/
+*.log
+data/state/
+state.json
+trades.csv
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/

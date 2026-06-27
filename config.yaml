@@ -1,0 +1,57 @@
+# ============================================================
+# CryptoKing — strategy & risk configuration
+# Tune these values WITHOUT touching code.
+# ============================================================
+
+engine:
+  # Instruments to trade (crypto.com naming, e.g. BTC_USDT)
+  instruments:
+    - BTC_USDT
+    - ETH_USDT
+  # Candle timeframe used by the strategy. Scalping -> 1m or 5m.
+  timeframe: "1m"
+  # How often (seconds) the main loop wakes up to evaluate.
+  poll_interval_seconds: 5
+  # Quote currency used for balances / sizing.
+  quote_currency: USDT
+
+strategy:
+  name: ema_rsi_scalper
+  params:
+    ema_fast: 9          # fast EMA period
+    ema_slow: 21         # slow EMA period
+    rsi_period: 14       # RSI lookback
+    rsi_overbought: 70   # don't buy above this
+    rsi_oversold: 30     # don't sell-signal below this when long
+    # Minimum expected edge per round trip, as a fraction (0.002 = 0.20%).
+    # Must comfortably exceed round-trip fees + slippage or scalping bleeds.
+    min_edge: 0.002
+    # Max spread (fraction of mid) allowed to enter — wide spread kills scalpers.
+    max_spread: 0.0008
+
+risk:
+  # Capital allocated to the bot (quote currency). PAPER mode starts with this.
+  starting_capital: 200.0
+  # Fraction of equity risked per trade (0.01 = 1%).
+  risk_per_trade: 0.01
+  # Max fraction of equity deployed in a single position.
+  max_position_fraction: 0.25
+  # Stop-loss / take-profit as fraction of entry price.
+  stop_loss_pct: 0.004     # 0.40%
+  take_profit_pct: 0.008   # 0.80% (>= 2x stop for positive expectancy)
+  # Hard kill switch: stop trading for the day after this loss fraction.
+  max_daily_loss_pct: 0.05 # 5%
+  # Max number of concurrent open positions across all instruments.
+  max_open_positions: 2
+
+fees:
+  # Round-trip estimate used by the strategy/risk layer (taker buy + taker sell).
+  # Crypto.com spot taker ~0.075% each side. Tune to YOUR actual fee tier.
+  taker_fee: 0.00075
+  maker_fee: 0.00040
+  # Assumed slippage per side as a fraction of price.
+  slippage: 0.0003
+
+logging:
+  level: INFO
+  trades_csv: logs/trades.csv
