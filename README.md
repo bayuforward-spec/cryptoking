@@ -106,6 +106,32 @@ src/cryptoking/
 tests/                         pytest suite
 ```
 
+## Backtesting (prove the edge first)
+
+The guide's step 1: never risk money on an unproven strategy. Backtest it.
+
+```bash
+# 1) fetch real candles from crypto.com into a CSV (run where network is open)
+python backtest.py --fetch data/BTC_USDT.csv --instrument BTC_USDT
+
+# 2) backtest the configured strategy on that data
+python backtest.py --csv data/BTC_USDT.csv --instrument BTC_USDT
+
+# or try it offline on deterministic synthetic data
+python backtest.py --demo
+```
+
+It replays candles through the **same** strategy + risk + paper-broker code the
+live engine uses (higher timeframe built by aggregating, exits checked intrabar)
+and prints win rate, reward:risk, profit factor, and **expected value per trade**.
+A positive expected value over a meaningful sample (30+ trades) is the green light
+the guide describes. The shipped defaults are a starting point — expect to tune
+`config.yaml` against real data before they show an edge.
+
+> Note: `--fetch` pulls the most recent candles the public API returns. For long
+> backtests you'll want a larger history (pagination is on the roadmap), or supply
+> your own CSV with columns `t,o,h,l,c,v`.
+
 ## Tests
 
 ```bash
@@ -163,10 +189,12 @@ to do next:
 ## Roadmap / not-yet-done
 
 - **Maker (limit) order execution** — pay maker not taker fees. Top priority for live.
+- Longer backtest history via paginated candle fetching.
 - WebSocket feed for lower-latency fills (current MVP polls REST).
-- Backtester over historical candles before paper.
 - Position reconciliation against the exchange on restart.
 - Dashboard authentication for safe remote access.
+- Additional exchange clients (Bybit futures for shorting, or a Bappebti-registered
+  Indonesian exchange) behind the existing Broker interface.
 
 ## Disclaimer
 

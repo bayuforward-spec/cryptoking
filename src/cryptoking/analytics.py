@@ -42,6 +42,11 @@ def compute_stats(trades_csv: str) -> Stats:
             except ValueError:
                 continue
 
+    return stats_from_pnls(pnls)
+
+
+def stats_from_pnls(pnls: list[float]) -> Stats:
+    """Compute performance stats from a list of realized per-trade PnLs."""
     if not pnls:
         return Stats()
 
