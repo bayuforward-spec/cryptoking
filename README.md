@@ -8,6 +8,9 @@ so you can validate everything before risking a cent.
 > Start in `paper` mode. Read the whole README. You are responsible for your funds
 > and for complying with local regulations (in Indonesia: Bappebti / OJK).
 
+> 🇮🇩 **Panduan lengkap berbahasa Indonesia (dari nol sampai jalan): [PANDUAN.md](PANDUAN.md)**
+> — Step-by-step untuk pemula. Teknis deploy: [DEPLOY.md](DEPLOY.md).
+
 ---
 
 ## What it does
