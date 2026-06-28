@@ -8,37 +8,40 @@ engine:
   instruments:
     - BTC_USDT
     - ETH_USDT
-  # Candle timeframe used by the strategy. Scalping -> 1m or 5m.
-  timeframe: "1m"
+  # Execution timeframe — where entries are found (the guide's 4h/lower TF).
+  timeframe: "15m"
+  # Higher timeframe for top-down DIRECTION (the guide's weekly/daily context).
+  # Set to null to disable top-down and use only the execution timeframe.
+  trend_timeframe: "4h"
   # How often (seconds) the main loop wakes up to evaluate.
-  poll_interval_seconds: 5
+  poll_interval_seconds: 15
   # Quote currency used for balances / sizing.
   quote_currency: USDT
 
+# Strategy from the trading guide: top-down structure + Fibonacci golden
+# pocket + candlestick confirmation. Long-only (spot). To use the simpler
+# scalper instead, set name: ema_rsi_scalper with its own params.
 strategy:
-  name: ema_rsi_scalper
+  name: structure_fib
   params:
-    ema_fast: 9          # fast EMA period
-    ema_slow: 21         # slow EMA period
-    rsi_period: 14       # RSI lookback
-    rsi_overbought: 70   # don't buy above this
-    rsi_oversold: 30     # don't sell-signal below this when long
-    # Minimum expected edge per round trip, as a fraction (0.002 = 0.20%).
-    # Must comfortably exceed round-trip fees + slippage or scalping bleeds.
-    min_edge: 0.002
-    # Max spread (fraction of mid) allowed to enter — wide spread kills scalpers.
-    max_spread: 0.0008
+    swing_k: 3                  # fractal window for swing-point detection
+    require_candle_pattern: true # require a bullish reversal candle to enter
+    stop_buffer: 0.0015         # place stop this fraction below the swing low
+    allow_range_entries: false  # only enter in confirmed uptrends
 
 risk:
   # Capital allocated to the bot (quote currency). PAPER mode starts with this.
   starting_capital: 200.0
-  # Fraction of equity risked per trade (0.01 = 1%).
+  # Fraction of equity risked per trade (the guide: 1%, never above 2%).
   risk_per_trade: 0.01
   # Max fraction of equity deployed in a single position.
   max_position_fraction: 0.25
-  # Stop-loss / take-profit as fraction of entry price.
-  stop_loss_pct: 0.004     # 0.40%
-  take_profit_pct: 0.008   # 0.80% (>= 2x stop for positive expectancy)
+  # Reward-to-risk multiple (the guide: min 1, prefer 2–3). Take-profit
+  # distance = rr_ratio * stop distance.
+  rr_ratio: 2.0
+  # Fallback stop/take used only when a trade has no structural stop.
+  stop_loss_pct: 0.01      # 1.0%
+  take_profit_pct: 0.02    # 2.0%
   # Hard kill switch: stop trading for the day after this loss fraction.
   max_daily_loss_pct: 0.05 # 5%
   # Max number of concurrent open positions across all instruments.

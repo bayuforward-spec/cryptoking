@@ -48,6 +48,7 @@ class EmaRsiScalper(Strategy):
         candles: Sequence[Candle],
         quote: Quote,
         in_position: bool,
+        trend_candles: Sequence[Candle] | None = None,
     ) -> Signal:
         closes = [c.c for c in candles]
         need = max(self.ema_slow, self.rsi_period) + 2

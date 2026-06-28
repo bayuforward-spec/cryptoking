@@ -100,11 +100,18 @@ class Engine:
         for inst in self.cfg.engine.instruments:
             quote = self.client.get_quote(inst)
             candles = self.client.get_candles(inst, self.cfg.engine.timeframe)
+            trend_candles = None
+            if self.cfg.engine.trend_timeframe:
+                trend_candles = self.client.get_candles(
+                    inst, self.cfg.engine.trend_timeframe
+                )
             quotes[inst] = quote
             prices[inst] = quote.mid
 
             pos = self.broker.get_position(inst)
-            signal = self.strategy.evaluate(candles, quote, in_position=pos is not None)
+            signal = self.strategy.evaluate(
+                candles, quote, in_position=pos is not None, trend_candles=trend_candles
+            )
             self.last_signals[inst] = {
                 "action": signal.action,
                 "reason": signal.reason,
@@ -124,10 +131,16 @@ class Engine:
             if signal.action == "BUY":
                 equity = self.broker.equity(prices)
                 decision = self.risk.size_entry(
-                    equity, quote.mid, len(self.broker.open_positions())
+                    equity,
+                    quote.mid,
+                    len(self.broker.open_positions()),
+                    stop_price=signal.stop_price,
                 )
                 if decision.allowed:
-                    self._open(inst, decision.quote_amount, quote.mid, signal.reason)
+                    self._open(
+                        inst, decision.quote_amount, quote.mid,
+                        signal.reason, signal.stop_price,
+                    )
                 else:
                     log.debug("Entry blocked for %s: %s", inst, decision.reason)
 
@@ -154,6 +167,8 @@ class Engine:
                         "quantity": pos.quantity,
                         "entry_price": pos.entry_price,
                         "current_price": px,
+                        "stop_price": pos.stop_price,
+                        "target_price": pos.target_price,
                         "unrealized_pnl": pos.unrealized_pnl(px),
                     }
                 )
@@ -178,13 +193,26 @@ class Engine:
 
     # ----------------------- order helpers -----------------------
 
-    def _open(self, inst: str, quote_amount: float, price: float, reason: str) -> None:
+    def _open(
+        self,
+        inst: str,
+        quote_amount: float,
+        price: float,
+        reason: str,
+        stop_price: float | None = None,
+    ) -> None:
         fill = self.broker.buy(inst, quote_amount, price, reason)
         self._cost_basis[inst] = fill.quantity * fill.price + fill.fee
+        # Attach structure-based stop + R:R target to the open position.
+        pos = self.broker.get_position(inst)
+        if pos is not None:
+            pos.stop_price = self.risk.stop_for(fill.price, stop_price)
+            pos.target_price = self.risk.target_for(fill.price, stop_price)
         self._record(fill, realized=0.0)
         log.info(
-            "OPEN  %s qty=%.6f @ %.2f fee=%.4f (%s)",
-            inst, fill.quantity, fill.price, fill.fee, reason,
+            "OPEN  %s qty=%.6f @ %.2f stop=%.2f target=%.2f (%s)",
+            inst, fill.quantity, fill.price,
+            pos.stop_price if pos else 0.0, pos.target_price if pos else 0.0, reason,
         )
 
     def _close(self, inst: str, price: float, reason: str) -> None:

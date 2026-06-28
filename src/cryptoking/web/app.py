@@ -20,6 +20,7 @@ from pathlib import Path
 
 from flask import Flask, jsonify, render_template
 
+from ..analytics import compute_stats
 from ..config import Config
 from ..engine import Engine
 
@@ -75,6 +76,10 @@ def create_app(config: Config, autostart: bool = False) -> Flask:
         # newest first, cap to last 100
         rows.reverse()
         return jsonify(rows[:100])
+
+    @app.get("/api/stats")
+    def stats():
+        return jsonify(compute_stats(config.logging.trades_csv).as_dict())
 
     @app.post("/api/start")
     def start():

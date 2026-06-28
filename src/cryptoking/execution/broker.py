@@ -20,6 +20,9 @@ class Position:
     instrument: str
     quantity: float       # base asset held (long only in this MVP)
     entry_price: float
+    # Protective levels (set by the strategy/risk layer at entry).
+    stop_price: float | None = None
+    target_price: float | None = None
 
     def unrealized_pnl(self, price: float) -> float:
         return (price - self.entry_price) * self.quantity

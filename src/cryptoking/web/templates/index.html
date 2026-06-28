@@ -70,6 +70,17 @@
   </div>
 
   <section>
+    <h2>Your Edge (closed trades)</h2>
+    <div class="cards">
+      <div class="card"><div class="label">Win rate</div><div class="value" id="winrate">—</div></div>
+      <div class="card"><div class="label">Expected value / trade</div><div class="value" id="ev">—</div></div>
+      <div class="card"><div class="label">Profit factor</div><div class="value" id="pf">—</div></div>
+      <div class="card"><div class="label">Reward : Risk</div><div class="value" id="rr">—</div></div>
+      <div class="card"><div class="label">Closed trades</div><div class="value" id="closed">—</div></div>
+    </div>
+  </section>
+
+  <section>
     <h2>Market & Signals</h2>
     <table>
       <thead><tr><th>Instrument</th><th class="num">Price</th><th>Signal</th><th>Reason</th><th class="num">RSI</th></tr></thead>
@@ -80,8 +91,8 @@
   <section>
     <h2>Open Positions</h2>
     <table>
-      <thead><tr><th>Instrument</th><th class="num">Qty</th><th class="num">Entry</th><th class="num">Now</th><th class="num">Unrealized</th></tr></thead>
-      <tbody id="positions"><tr><td colspan="5" class="empty">no open positions</td></tr></tbody>
+      <thead><tr><th>Instrument</th><th class="num">Qty</th><th class="num">Entry</th><th class="num">Now</th><th class="num">Stop</th><th class="num">Target</th><th class="num">Unrealized</th></tr></thead>
+      <tbody id="positions"><tr><td colspan="7" class="empty">no open positions</td></tr></tbody>
     </table>
   </section>
 
@@ -128,8 +139,21 @@ async function refresh(){
 
     const posRows = (s.positions||[]).map(p =>
       `<tr><td>${p.instrument}</td><td class="num">${fmt(p.quantity,6)}</td><td class="num">${fmt(p.entry_price)}</td>
-       <td class="num">${fmt(p.current_price)}</td><td class="num ${cls(p.unrealized_pnl)}">${fmt(p.unrealized_pnl,4)}</td></tr>`).join("");
-    document.getElementById("positions").innerHTML = posRows || `<tr><td colspan="5" class="empty">no open positions</td></tr>`;
+       <td class="num">${fmt(p.current_price)}</td><td class="num neg">${p.stop_price?fmt(p.stop_price):"—"}</td>
+       <td class="num pos">${p.target_price?fmt(p.target_price):"—"}</td>
+       <td class="num ${cls(p.unrealized_pnl)}">${fmt(p.unrealized_pnl,4)}</td></tr>`).join("");
+    document.getElementById("positions").innerHTML = posRows || `<tr><td colspan="7" class="empty">no open positions</td></tr>`;
+
+    // performance / edge
+    try {
+      const st = await (await fetch("/api/stats")).json();
+      document.getElementById("winrate").textContent = (st.win_rate*100).toFixed(1) + "%";
+      const ev = document.getElementById("ev");
+      ev.textContent = (st.expectancy>=0?"+":"") + "$" + fmt(st.expectancy,4); ev.className = "value " + cls(st.expectancy);
+      document.getElementById("pf").textContent = isFinite(st.profit_factor)?fmt(st.profit_factor,2):"∞";
+      document.getElementById("rr").textContent = fmt(st.reward_risk,2);
+      document.getElementById("closed").textContent = st.closed_trades;
+    } catch(e){}
 
     const trades = await (await fetch("/api/trades")).json();
     const tRows = trades.map(t =>

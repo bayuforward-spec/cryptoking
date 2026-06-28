@@ -17,9 +17,10 @@ so you can validate everything before risking a cent.
 ```
 
 - **Market data** — pulls live candles + order-book quotes from crypto.com.
-- **Strategy** (`ema_rsi_scalper`) — goes long when fast EMA > slow EMA, RSI isn't
-  overbought, and the spread is tight. Exits on EMA cross-down or RSI exhaustion.
-  It is **fee-aware**: scalping only works if your edge beats round-trip fees.
+- **Strategy** (`structure_fib`, default) — a faithful encoding of the trading
+  guide's method (see below). Two strategies ship:
+  - `structure_fib` — top-down structure + Fibonacci golden pocket + candlestick.
+  - `ema_rsi_scalper` — simpler EMA-cross + RSI scalper (fee-aware).
 - **Risk manager** — position sizing from a fixed risk-per-trade, stop-loss /
   take-profit, max open positions, and a **daily-loss kill switch**.
 - **Two brokers** — `PaperBroker` (simulated fills against real prices, with fees +
@@ -110,6 +111,40 @@ tests/                         pytest suite
 ```bash
 python -m pytest -q
 ```
+
+## The strategy: the trading guide, in code
+
+The default `structure_fib` strategy implements the guide's method end-to-end:
+
+**Top-down framework** — the higher timeframe (`trend_timeframe`, e.g. 4h) sets
+*direction* via market structure; the execution timeframe (`timeframe`, e.g. 15m)
+finds the *entry*.
+
+**Market structure** — higher-highs + higher-lows = uptrend; the reverse = downtrend;
+otherwise a range. The bot only takes longs *with* an uptrend (spot is long-only;
+shorting needs futures/margin, intentionally out of scope here).
+
+**Fibonacci golden pocket** — it draws the retracement of the last up-impulse and
+only enters when price has pulled back into the 0.618–0.786 "golden pocket" (support).
+
+**Candlestick confirmation** — entry requires a bullish reversal candle (hammer,
+bullish engulfing, tweezer bottom, or marubozu) in that pocket.
+
+**Risk = the guide's math** (in `risk/`):
+- Risk **1%** of equity per trade (`risk_per_trade`), never more.
+- Position size = `equity × risk% ÷ stop-distance` — sized from the *actual* stop,
+  which is placed just below the swing low (structure invalidation).
+- Take-profit = **R:R × stop-distance** (`rr_ratio`, default 2:1).
+- Daily-loss kill switch halts new entries after `max_daily_loss_pct`.
+
+**The math, tracked for you** — the dashboard's "Your Edge" panel computes win rate,
+**expected value per trade**, profit factor, and reward:risk from your closed trades
+(`analytics.py`). As the guide stresses: a positive expected value is the whole game —
+you don't need to win most trades, just make more when right than you lose when wrong.
+
+**The process** — backtest → demo/paper (25–50+ trades) → live only once expected
+value is positive. Paper mode + the ledger + the edge panel are built for exactly this.
+Don't skip steps.
 
 ## Fees: the scalper's #1 enemy
 

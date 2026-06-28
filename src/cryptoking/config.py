@@ -20,9 +20,10 @@ except ImportError:  # dotenv is optional at runtime
 @dataclass
 class EngineConfig:
     instruments: list[str]
-    timeframe: str
+    timeframe: str               # execution timeframe (entries)
     poll_interval_seconds: int
     quote_currency: str
+    trend_timeframe: str | None = None   # higher timeframe for top-down direction
 
 
 @dataclass
@@ -40,6 +41,10 @@ class RiskConfig:
     take_profit_pct: float
     max_daily_loss_pct: float
     max_open_positions: int
+    # Reward-to-risk multiple (the guide: minimum 1, prefer 2–3). Take-profit
+    # distance = rr_ratio * stop distance. Falls back to take_profit_pct only
+    # when a trade has no explicit stop distance.
+    rr_ratio: float = 2.0
 
 
 @dataclass
