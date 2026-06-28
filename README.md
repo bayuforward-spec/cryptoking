@@ -82,8 +82,12 @@ Secrets and mode live in `.env` (never committed).
 
 ## Running 24/7
 
-The bot is a long-running process. Keep it alive on a small VPS with e.g. `systemd`,
-`tmux`, `nohup`, or Docker:
+The bot is a long-running process. The recommended free, hands-off setup is a
+**[Oracle Cloud Always Free](DEPLOY.md)** VM with systemd — see **[DEPLOY.md](DEPLOY.md)**
+for the full step-by-step (free VM, auto-restart, private dashboard via SSH tunnel,
+weekly self-learning timer).
+
+Quick local option:
 
 ```bash
 nohup python run.py > logs/run.out 2>&1 &
@@ -98,11 +102,18 @@ src/cryptoking/
   config.py                    config + .env loading
   indicators.py                EMA / RSI / SMA (pure Python)
   exchange/cryptocom.py        REST client + HMAC signing
+  strategy/structure_fib.py    structure + Fibonacci + candlestick strategy
   strategy/scalping.py         EMA+RSI scalping strategy
   risk/risk_manager.py         sizing, stops, kill switch
-  execution/paper.py           simulated broker
+  execution/paper.py           simulated broker (market + maker/limit)
   execution/live.py            real-money broker
+  ai/analyst.py                optional Claude BUY-signal confirmation
+  learn.py                     walk-forward self-learning
   engine.py                    the 24/7 loop
+  web/                         Flask dashboard
+backtest.py / optimize.py / learn.py   CLI tools
+deploy/                        systemd units + setup/retune scripts
+DEPLOY.md                      Oracle Cloud (free) deploy guide
 tests/                         pytest suite
 ```
 
@@ -177,6 +188,35 @@ pip install anthropic
 > Note: this is the legitimate use of Anthropic credits in this project — Claude as
 > part of the bot's decision-making. It does **not** host the bot; you still run the
 > bot on a VPS/PC (see Running 24/7).
+
+## Self-learning (walk-forward re-tuning)
+
+The bot can adapt its own parameters to recent market behavior — safely. The trap
+with self-learning a trading bot is **overfitting** (a config that looks great on
+the past and bleeds live), so the guard is strict out-of-sample validation:
+
+```bash
+python learn.py --csv data/BTC_USDT.csv            # propose only
+python learn.py --csv data/BTC_USDT.csv --apply     # apply if it promotes
+python learn.py --csv data/BTC_USDT.csv --ai-review # add a Claude sanity-check note
+```
+
+How it works (`learn.py` + `src/cryptoking/learn.py`):
+1. Split recent candles into **train** (older) and **holdout** (newer).
+2. Grid-search parameters on **train only**.
+3. Measure the train-winner on the **holdout** (data it never saw).
+4. Measure the **current** config on the same holdout.
+5. **Promote only if** the new config beats current on the holdout, has a positive
+   expected value, and traded enough to be meaningful — otherwise reject.
+
+A promotion is written to `logs/proposal.json`; nothing changes live until you
+**Approve** it from the dashboard's *Self-learning* panel (stop the bot first), or
+pass `--apply` for autonomous adaptation. Run it weekly via the systemd timer in
+[DEPLOY.md](DEPLOY.md). Optionally `--ai-review` attaches a Claude note flagging
+overfitting/sizing concerns (uses Anthropic credits).
+
+> The bot never silently rewrites its own live trading rules — promotions must
+> clear the holdout bar, and applying is gated behind approval or an explicit flag.
 
 ## Settings panel
 

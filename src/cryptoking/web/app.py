@@ -23,6 +23,7 @@ from flask import Flask, jsonify, render_template, request
 from ..analytics import compute_stats
 from ..config import Config, save_config
 from ..engine import Engine
+from ..learn import Metrics, Proposal, apply_proposal, read_proposal
 
 log = logging.getLogger("cryptoking")
 
@@ -184,6 +185,30 @@ def create_app(config: Config, autostart: bool = False, config_path: str = "conf
             return jsonify({"ok": False, "error": f"invalid value: {exc}"}), 400
         save_config(config, config_path)
         runner.rebuild()  # pick up new settings on next start
+        return jsonify({"ok": True})
+
+    @app.get("/api/learn/proposal")
+    def learn_proposal():
+        return jsonify(read_proposal() or {})
+
+    @app.post("/api/learn/apply")
+    def learn_apply():
+        if runner.is_running:
+            return jsonify({"ok": False, "error": "stop the bot before applying"}), 409
+        data = read_proposal()
+        if not data:
+            return jsonify({"ok": False, "error": "no proposal found"}), 404
+        if not data.get("promote") or data.get("applied"):
+            return jsonify({"ok": False, "error": "proposal is not promotable or already applied"}), 400
+        proposal = Proposal(
+            created_at=data["created_at"], promote=data["promote"], reason=data["reason"],
+            strategy_params=data["strategy_params"], risk_overrides=data["risk_overrides"],
+            current_holdout=Metrics(**data["current_holdout"]),
+            proposed_holdout=Metrics(**data["proposed_holdout"]),
+            min_trades=data["min_trades"],
+        )
+        apply_proposal(proposal, config, config_path)
+        runner.rebuild()
         return jsonify({"ok": True})
 
     @app.post("/api/start")

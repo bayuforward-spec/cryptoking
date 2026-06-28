@@ -1,0 +1,10 @@
+[Unit]
+Description=Run CryptoKing self-learning re-tune weekly
+
+[Timer]
+# Every Monday 03:00. Adjust as you like.
+OnCalendar=Mon *-*-* 03:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,13 @@
+[Unit]
+Description=CryptoKing self-learning re-tune (fetch recent candles + walk-forward)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=/home/ubuntu/cryptoking
+EnvironmentFile=/home/ubuntu/cryptoking/.env
+# Fetch fresh candles, then propose a re-tune. Drop --apply to require manual
+# approval from the dashboard; keep it for autonomous adaptation.
+ExecStart=/home/ubuntu/cryptoking/deploy/retune.sh

@@ -102,6 +102,30 @@
   </section>
 
   <section>
+    <h2>Self-learning <span class="ts">(walk-forward re-tune; run learn.py to refresh)</span></h2>
+    <div id="proposalBox" class="card">
+      <div id="proposalEmpty" class="empty">No proposal yet. Run <code>python learn.py --csv data/&lt;file&gt;.csv</code> to generate one.</div>
+      <div id="proposalBody" style="display:none;">
+        <div><span id="proposalBadge" class="badge"></span> <span class="ts" id="proposalTime"></span></div>
+        <p id="proposalReason" style="margin:10px 0;"></p>
+        <table>
+          <thead><tr><th></th><th class="num">EV/trade</th><th class="num">Win%</th><th class="num">Trades (holdout)</th></tr></thead>
+          <tbody>
+            <tr><td>Current</td><td class="num" id="propCurEv"></td><td class="num" id="propCurWin"></td><td class="num" id="propCurN"></td></tr>
+            <tr><td>Proposed</td><td class="num" id="propNewEv"></td><td class="num" id="propNewWin"></td><td class="num" id="propNewN"></td></tr>
+          </tbody>
+        </table>
+        <p class="ts" id="proposalChange" style="margin-top:8px;"></p>
+        <p class="ts" id="proposalAi"></p>
+        <div style="margin-top:10px;display:flex;gap:10px;align-items:center;">
+          <button id="approveBtn" onclick="approveProposal()">✅ Approve &amp; apply</button>
+          <span id="approveMsg" class="ts"></span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
     <h2>Settings <span class="ts">(stop the bot to edit; saved to config.yaml)</span></h2>
     <div id="settings" class="settings">
       <div class="field"><label>Execution</label>
@@ -254,9 +278,48 @@ async function refresh(){
     document.getElementById("trades").innerHTML = tRows || `<tr><td colspan="7" class="empty">no trades yet</td></tr>`;
   } catch(e){ /* keep last view on transient errors */ }
 }
+async function loadProposal(){
+  try {
+    const p = await (await fetch("/api/learn/proposal")).json();
+    const empty = document.getElementById("proposalEmpty");
+    const body = document.getElementById("proposalBody");
+    if (!p || !p.created_at){ empty.style.display="block"; body.style.display="none"; return; }
+    empty.style.display="none"; body.style.display="block";
+    const badge = document.getElementById("proposalBadge");
+    if (p.applied){ badge.textContent="APPLIED"; badge.className="badge paper"; }
+    else if (p.promote){ badge.textContent="PROMOTE"; badge.className="badge paper"; }
+    else { badge.textContent="REJECTED"; badge.className="badge live"; }
+    document.getElementById("proposalTime").textContent = "· " + (p.created_at||"").replace("T"," ").slice(0,19) + " UTC";
+    document.getElementById("proposalReason").textContent = p.reason||"";
+    const c=p.current_holdout||{}, n=p.proposed_holdout||{};
+    document.getElementById("propCurEv").textContent = fmt(c.expectancy,4);
+    document.getElementById("propCurWin").textContent = fmt((c.win_rate||0)*100,0);
+    document.getElementById("propCurN").textContent = c.closed_trades||0;
+    document.getElementById("propNewEv").textContent = fmt(n.expectancy,4);
+    document.getElementById("propNewWin").textContent = fmt((n.win_rate||0)*100,0);
+    document.getElementById("propNewN").textContent = n.closed_trades||0;
+    document.getElementById("proposalChange").textContent = p.promote
+      ? "Change: strategy " + JSON.stringify(p.strategy_params) + " · risk " + JSON.stringify(p.risk_overrides) : "";
+    document.getElementById("proposalAi").textContent = p.ai_note ? "AI note: " + p.ai_note : "";
+    document.getElementById("approveBtn").style.display = (p.promote && !p.applied) ? "inline-block" : "none";
+  } catch(e){}
+}
+async function approveProposal(){
+  const msg = document.getElementById("approveMsg");
+  try {
+    const r = await fetch("/api/learn/apply", {method:"POST"});
+    const j = await r.json();
+    if (j.ok){ msg.textContent="✅ applied — restart not needed, picked up on next start"; msg.style.color="var(--green)"; loadProposal(); loadSettings(); }
+    else { msg.textContent="⚠️ " + (j.error||"failed"); msg.style.color="var(--accent)"; }
+  } catch(e){ msg.textContent="⚠️ error"; msg.style.color="var(--red)"; }
+  setTimeout(()=>{ msg.textContent=""; }, 5000);
+}
+
 refresh();
 loadSettings();
+loadProposal();
 setInterval(refresh, 3000);
+setInterval(loadProposal, 10000);
 </script>
 </body>
 </html>
