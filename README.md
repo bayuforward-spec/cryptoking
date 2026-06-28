@@ -146,6 +146,38 @@ It backtests every combination in the grids (edit them at the top of `optimize.p
 and prints the best by EV, flagging thin samples. Use it to settle `swing_k`,
 `rr_ratio`, `stop_buffer`, etc. before going to paper.
 
+## AI signal confirmation (optional)
+
+CryptoKing can use **Claude** as a final sanity check on every BUY signal. When
+the technical strategy fires, the setup (instrument, price, proposed stop, trend,
+Fibonacci/candle context) is sent to the Claude API, which returns a structured
+verdict `{proceed, confidence, reason}`. A veto skips the entry; the reasoning
+shows up in the dashboard signals row and the trade reason.
+
+```yaml
+# config.yaml
+ai:
+  enabled: true
+  model: claude-opus-4-8     # or claude-sonnet-4-6 / claude-haiku-4-5 (cheaper)
+  fail_open: true            # if the API errors: true = allow, false = skip
+```
+
+```bash
+# .env
+ANTHROPIC_API_KEY=sk-ant-...
+pip install anthropic
+```
+
+- Runs **only on actual BUY signals**, never every loop — cost scales with trade
+  frequency, not poll rate. Haiku is the cheapest model for a high-frequency filter.
+- Works anywhere with internet (your VPS/PC) — needs to reach `api.anthropic.com`.
+- It's a **filter, not a generator**: it can only veto or approve the technical
+  strategy's entries, never invent its own. Toggle it from the Settings panel too.
+
+> Note: this is the legitimate use of Anthropic credits in this project — Claude as
+> part of the bot's decision-making. It does **not** host the bot; you still run the
+> bot on a VPS/PC (see Running 24/7).
+
 ## Settings panel
 
 The dashboard has a **Settings** section to change order type (market/limit),

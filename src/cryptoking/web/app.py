@@ -105,6 +105,14 @@ def _apply_config_updates(config: Config, body: dict) -> None:
     if "limit_offset" in ex:
         config.execution.limit_offset = float(ex["limit_offset"])
 
+    ai = body.get("ai", {}) or {}
+    if "enabled" in ai:
+        config.ai.enabled = _coerce_like(config.ai.enabled, ai["enabled"])
+    if "model" in ai:
+        config.ai.model = str(ai["model"])
+    if "fail_open" in ai:
+        config.ai.fail_open = _coerce_like(config.ai.fail_open, ai["fail_open"])
+
 
 def create_app(config: Config, autostart: bool = False, config_path: str = "config.yaml") -> Flask:
     app = Flask(__name__)
@@ -156,6 +164,11 @@ def create_app(config: Config, autostart: bool = False, config_path: str = "conf
                 "execution": {
                     "order_type": config.execution.order_type,
                     "limit_offset": config.execution.limit_offset,
+                },
+                "ai": {
+                    "enabled": config.ai.enabled,
+                    "model": config.ai.model,
+                    "fail_open": config.ai.fail_open,
                 },
             }
         )

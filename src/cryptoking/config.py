@@ -69,6 +69,18 @@ class ExecutionConfig:
 
 
 @dataclass
+class AIConfig:
+    # Use Claude to confirm/veto each BUY signal before entering.
+    enabled: bool = False
+    model: str = "claude-opus-4-8"
+    # Reasoning effort for the API ("low"/"medium"/"high"); null = omit (works
+    # on all models, including Haiku which rejects the effort param).
+    effort: str | None = None
+    # If the API is unavailable/errors: true = allow the trade, false = skip it.
+    fail_open: bool = True
+
+
+@dataclass
 class LoggingConfig:
     level: str
     trades_csv: str
@@ -85,6 +97,7 @@ class Config:
     risk: RiskConfig
     fees: FeesConfig
     execution: ExecutionConfig
+    ai: AIConfig
     logging: LoggingConfig
     raw: dict[str, Any] = field(default_factory=dict)
 
@@ -118,6 +131,7 @@ def load_config(path: str | Path = "config.yaml") -> Config:
         risk=RiskConfig(**data["risk"]),
         fees=FeesConfig(**data["fees"]),
         execution=ExecutionConfig(**(data.get("execution") or {})),
+        ai=AIConfig(**(data.get("ai") or {})),
         logging=LoggingConfig(**data["logging"]),
         raw=data,
     )
@@ -157,6 +171,12 @@ def to_yaml_dict(cfg: Config) -> dict[str, Any]:
         "execution": {
             "order_type": cfg.execution.order_type,
             "limit_offset": cfg.execution.limit_offset,
+        },
+        "ai": {
+            "enabled": cfg.ai.enabled,
+            "model": cfg.ai.model,
+            "effort": cfg.ai.effort,
+            "fail_open": cfg.ai.fail_open,
         },
         "fees": {
             "taker_fee": cfg.fees.taker_fee,

@@ -7,6 +7,7 @@ import threading
 import time
 from datetime import datetime, timezone
 
+from .ai import SignalAnalyst
 from .config import Config
 from .exchange.cryptocom import CryptoComClient, Quote
 from .execution.broker import Broker, Fill
@@ -29,6 +30,12 @@ class Engine:
         )
         self.strategy = build_strategy(config.strategy.name, config.strategy.params)
         self.risk = RiskManager(config.risk)
+        self.analyst = SignalAnalyst(
+            enabled=config.ai.enabled,
+            model=config.ai.model,
+            effort=config.ai.effort,
+            fail_open=config.ai.fail_open,
+        )
         self.ledger = TradeLedger(config.logging.trades_csv)
         self.broker: Broker = self._build_broker()
         self.realized_pnl = 0.0
@@ -145,13 +152,31 @@ class Engine:
                     len(self.broker.open_positions()),
                     stop_price=signal.stop_price,
                 )
-                if decision.allowed:
-                    self._open(
-                        inst, decision.quote_amount, quote.mid,
-                        signal.reason, signal.stop_price,
-                    )
-                else:
+                if not decision.allowed:
                     log.debug("Entry blocked for %s: %s", inst, decision.reason)
+                    continue
+                # Optional AI confirmation before committing the entry.
+                verdict = self.analyst.review(
+                    {
+                        "instrument": inst,
+                        "price": round(quote.mid, 2),
+                        "proposed_stop": round(signal.stop_price, 2) if signal.stop_price else None,
+                        "strategy_reason": signal.reason,
+                        "signal_meta": signal.meta,
+                    }
+                )
+                self.last_signals[inst]["ai"] = {
+                    "proceed": verdict.proceed,
+                    "confidence": round(verdict.confidence, 2),
+                    "reason": verdict.reason,
+                }
+                if not verdict.proceed:
+                    log.info("AI vetoed %s entry: %s", inst, verdict.reason)
+                    continue
+                reason = signal.reason
+                if self.analyst.enabled:
+                    reason = f"{signal.reason} | AI ok ({verdict.confidence:.2f})"
+                self._open(inst, decision.quote_amount, quote.mid, reason, signal.stop_price)
 
         equity = self.broker.equity(prices)
         self.risk.update_equity(equity)

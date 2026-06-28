@@ -121,6 +121,16 @@
         <select id="set_require_candle_pattern"><option value="true">yes</option><option value="false">no</option></select>
       </div>
       <div class="field"><label>stop_buffer</label><input id="set_stop_buffer" type="number" step="0.0005" /></div>
+      <div class="field"><label>AI confirmation</label>
+        <select id="set_ai_enabled"><option value="false">off</option><option value="true">on (uses Claude credits)</option></select>
+      </div>
+      <div class="field"><label>AI model</label>
+        <select id="set_ai_model">
+          <option value="claude-opus-4-8">claude-opus-4-8</option>
+          <option value="claude-sonnet-4-6">claude-sonnet-4-6</option>
+          <option value="claude-haiku-4-5">claude-haiku-4-5 (cheapest)</option>
+        </select>
+      </div>
     </div>
     <div style="margin-top:12px;display:flex;gap:10px;align-items:center;">
       <button onclick="saveSettings()">💾 Save settings</button>
@@ -163,6 +173,7 @@ async function loadSettings(){
     set("set_swing_k", c.strategy.params.swing_k);
     set("set_require_candle_pattern", String(c.strategy.params.require_candle_pattern));
     set("set_stop_buffer", c.strategy.params.stop_buffer);
+    if (c.ai) { set("set_ai_enabled", String(c.ai.enabled)); set("set_ai_model", c.ai.model); }
   } catch(e){}
 }
 
@@ -176,6 +187,7 @@ async function saveSettings(){
     strategy: { params: { swing_k: v("set_swing_k"),
             require_candle_pattern: v("set_require_candle_pattern")==="true",
             stop_buffer: v("set_stop_buffer") } },
+    ai: { enabled: v("set_ai_enabled")==="true", model: v("set_ai_model") },
   };
   const msg = document.getElementById("setMsg");
   try {
@@ -207,8 +219,10 @@ async function refresh(){
     const sig = s.signals||{};
     const sigRows = (s.instruments||[]).map(i => {
       const d = sig[i]||{}; const m = d.meta||{};
+      let reason = d.reason||"";
+      if (d.ai) reason += ` <span class="${d.ai.proceed?'pos':'neg'}">[AI ${d.ai.proceed?'ok':'veto'} ${fmt(d.ai.confidence,2)}: ${d.ai.reason}]</span>`;
       return `<tr><td>${i}</td><td class="num">${s.prices&&s.prices[i]?fmt(s.prices[i]):"—"}</td>
-        <td class="sig ${d.action||"HOLD"}">${d.action||"—"}</td><td>${d.reason||""}</td>
+        <td class="sig ${d.action||"HOLD"}">${d.action||"—"}</td><td>${reason}</td>
         <td class="num">${m.rsi!==undefined?fmt(m.rsi,1):"—"}</td></tr>`;
     }).join("");
     document.getElementById("signals").innerHTML = sigRows || `<tr><td colspan="5" class="empty">waiting…</td></tr>`;

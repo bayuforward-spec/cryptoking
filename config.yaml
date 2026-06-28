@@ -54,6 +54,15 @@ execution:
   # For limit orders: how far inside the spread to post, as a fraction of price.
   limit_offset: 0.0005
 
+# Optional AI confirmation: Claude reviews each BUY signal and can veto it.
+# Requires ANTHROPIC_API_KEY in .env and `pip install anthropic`. Uses credits
+# only on actual entry signals. See README "AI signal confirmation".
+ai:
+  enabled: false            # turn on to route every BUY through Claude
+  model: claude-opus-4-8    # or claude-sonnet-4-6 / claude-haiku-4-5 (cheaper)
+  effort: null              # null | low | medium | high (omit for Haiku)
+  fail_open: true           # if the API errors: true=allow trade, false=skip
+
 fees:
   # Round-trip estimate used by the strategy/risk layer (taker buy + taker sell).
   # Crypto.com spot taker ~0.075% each side. Tune to YOUR actual fee tier.
