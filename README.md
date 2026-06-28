@@ -132,6 +132,27 @@ the guide describes. The shipped defaults are a starting point — expect to tun
 > backtests you'll want a larger history (pagination is on the roadmap), or supply
 > your own CSV with columns `t,o,h,l,c,v`.
 
+## Tuning (find a positive-edge config)
+
+Grid-search strategy + risk parameters over historical candles and rank by
+expected value:
+
+```bash
+python optimize.py --csv data/BTC_USDT.csv     # real data
+python optimize.py --demo                        # synthetic
+```
+
+It backtests every combination in the grids (edit them at the top of `optimize.py`)
+and prints the best by EV, flagging thin samples. Use it to settle `swing_k`,
+`rr_ratio`, `stop_buffer`, etc. before going to paper.
+
+## Settings panel
+
+The dashboard has a **Settings** section to change order type (market/limit),
+timeframes, risk-per-trade, reward:risk, stop buffer, and strategy params — no file
+editing. Stop the bot, edit, Save; changes are written to `config.yaml` and applied
+on the next Start. (Settings are locked while the bot is running.)
+
 ## Tests
 
 ```bash
@@ -178,8 +199,10 @@ Round-trip taker fees on spot are ~0.15%. If your average trade tries to capture
 less than that, fees quietly eat you alive. How this project fights back, and what
 to do next:
 
-1. **Maker/limit orders instead of market** (biggest win — on the roadmap). Post-only
-   limit entries pay the lower maker fee instead of the taker fee.
+1. **Maker/limit orders instead of market** (biggest win — now built in, default
+   `order_type: limit`). Post-only limit entries pay the lower maker fee instead of
+   the taker fee and avoid crossing the spread. Switch in `config.yaml` → `execution`
+   or from the dashboard Settings panel.
 2. **Stake CRO** for a lower fee tier on crypto.com.
 3. **Fewer, higher-quality trades** with a bigger target. `strategy.min_edge` and the
    take-profit/stop ratio in `config.yaml` enforce a net-of-fee edge; raise the
@@ -188,9 +211,10 @@ to do next:
 
 ## Roadmap / not-yet-done
 
-- **Maker (limit) order execution** — pay maker not taker fees. Top priority for live.
 - Longer backtest history via paginated candle fetching.
 - WebSocket feed for lower-latency fills (current MVP polls REST).
+- Maker-order fill modeling: real limit orders may not fill; the paper broker
+  currently assumes they do. Add unfilled/partial handling for live realism.
 - Position reconciliation against the exchange on restart.
 - Dashboard authentication for safe remote access.
 - Additional exchange clients (Bybit futures for shorting, or a Bappebti-registered

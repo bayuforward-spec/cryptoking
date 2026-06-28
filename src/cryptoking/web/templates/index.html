@@ -45,6 +45,11 @@
   .warn { background: #3a2a12; color: var(--accent); padding: 10px 14px; border-radius: 8px;
           margin-bottom: 16px; display: none; }
   .ts { color: var(--muted); font-size: 12px; }
+  .settings { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field label { color: var(--muted); font-size: 12px; }
+  .field input, .field select { background: var(--panel2); border: 1px solid var(--line);
+    color: var(--text); border-radius: 8px; padding: 8px 10px; font-size: 14px; }
 </style>
 </head>
 <body>
@@ -97,6 +102,33 @@
   </section>
 
   <section>
+    <h2>Settings <span class="ts">(stop the bot to edit; saved to config.yaml)</span></h2>
+    <div id="settings" class="settings">
+      <div class="field"><label>Execution</label>
+        <select id="set_order_type">
+          <option value="limit">limit (maker — lower fee)</option>
+          <option value="market">market (taker — instant)</option>
+        </select>
+      </div>
+      <div class="field"><label>Exec timeframe</label><input id="set_timeframe" type="text" /></div>
+      <div class="field"><label>Trend timeframe</label><input id="set_trend_timeframe" type="text" /></div>
+      <div class="field"><label>Risk per trade</label><input id="set_risk_per_trade" type="number" step="0.001" /></div>
+      <div class="field"><label>Reward : Risk</label><input id="set_rr_ratio" type="number" step="0.1" /></div>
+      <div class="field"><label>Max open positions</label><input id="set_max_open_positions" type="number" step="1" /></div>
+      <div class="field"><label>Max daily loss</label><input id="set_max_daily_loss_pct" type="number" step="0.01" /></div>
+      <div class="field"><label>swing_k</label><input id="set_swing_k" type="number" step="1" /></div>
+      <div class="field"><label>Require candle pattern</label>
+        <select id="set_require_candle_pattern"><option value="true">yes</option><option value="false">no</option></select>
+      </div>
+      <div class="field"><label>stop_buffer</label><input id="set_stop_buffer" type="number" step="0.0005" /></div>
+    </div>
+    <div style="margin-top:12px;display:flex;gap:10px;align-items:center;">
+      <button onclick="saveSettings()">💾 Save settings</button>
+      <span id="setMsg" class="ts"></span>
+    </div>
+  </section>
+
+  <section>
     <h2>Recent Trades</h2>
     <table>
       <thead><tr><th>Time (UTC)</th><th>Side</th><th>Instrument</th><th class="num">Qty</th><th class="num">Price</th><th class="num">PnL</th><th>Reason</th></tr></thead>
@@ -109,7 +141,51 @@
 const fmt = (n, d=2) => (n === null || n === undefined || n === "") ? "—" : Number(n).toLocaleString(undefined, {minimumFractionDigits: d, maximumFractionDigits: d});
 const cls = n => Number(n) > 0 ? "pos" : Number(n) < 0 ? "neg" : "";
 
-async function post(url){ try { await fetch(url, {method:"POST"}); refresh(); } catch(e){} }
+async function post(url){ try { await fetch(url, {method:"POST"}); refresh(); loadSettings(); } catch(e){} }
+
+let settingsDirty = false;
+["set_order_type","set_timeframe","set_trend_timeframe","set_risk_per_trade","set_rr_ratio",
+ "set_max_open_positions","set_max_daily_loss_pct","set_swing_k","set_require_candle_pattern",
+ "set_stop_buffer"].forEach(id => document.addEventListener("input", e => { if(e.target.id===id) settingsDirty = true; }));
+
+async function loadSettings(){
+  if (settingsDirty) return;  // don't clobber edits in progress
+  try {
+    const c = await (await fetch("/api/config")).json();
+    const set = (id,v)=>{ const el=document.getElementById(id); if(el) el.value = v; };
+    set("set_order_type", c.execution.order_type);
+    set("set_timeframe", c.engine.timeframe);
+    set("set_trend_timeframe", c.engine.trend_timeframe || "");
+    set("set_risk_per_trade", c.risk.risk_per_trade);
+    set("set_rr_ratio", c.risk.rr_ratio);
+    set("set_max_open_positions", c.risk.max_open_positions);
+    set("set_max_daily_loss_pct", c.risk.max_daily_loss_pct);
+    set("set_swing_k", c.strategy.params.swing_k);
+    set("set_require_candle_pattern", String(c.strategy.params.require_candle_pattern));
+    set("set_stop_buffer", c.strategy.params.stop_buffer);
+  } catch(e){}
+}
+
+async function saveSettings(){
+  const v = id => document.getElementById(id).value;
+  const payload = {
+    engine: { timeframe: v("set_timeframe"), trend_timeframe: v("set_trend_timeframe") },
+    risk: { risk_per_trade: v("set_risk_per_trade"), rr_ratio: v("set_rr_ratio"),
+            max_open_positions: v("set_max_open_positions"), max_daily_loss_pct: v("set_max_daily_loss_pct") },
+    execution: { order_type: v("set_order_type") },
+    strategy: { params: { swing_k: v("set_swing_k"),
+            require_candle_pattern: v("set_require_candle_pattern")==="true",
+            stop_buffer: v("set_stop_buffer") } },
+  };
+  const msg = document.getElementById("setMsg");
+  try {
+    const r = await fetch("/api/config", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(payload)});
+    const j = await r.json();
+    if (j.ok){ settingsDirty = false; msg.textContent = "✅ saved"; msg.style.color = "var(--green)"; loadSettings(); }
+    else { msg.textContent = "⚠️ " + (j.error||"failed"); msg.style.color = "var(--accent)"; }
+  } catch(e){ msg.textContent = "⚠️ error"; msg.style.color = "var(--red)"; }
+  setTimeout(()=>{ msg.textContent=""; }, 4000);
+}
 
 async function refresh(){
   try {
@@ -165,6 +241,7 @@ async function refresh(){
   } catch(e){ /* keep last view on transient errors */ }
 }
 refresh();
+loadSettings();
 setInterval(refresh, 3000);
 </script>
 </body>

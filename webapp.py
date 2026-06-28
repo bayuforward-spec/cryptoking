@@ -35,7 +35,7 @@ def main() -> int:
     log = setup_logging(config.logging.level)
     log.info("Dashboard on http://%s:%d  (mode=%s)", args.host, args.port, config.mode)
 
-    app = create_app(config, autostart=args.autostart)
+    app = create_app(config, autostart=args.autostart, config_path=args.config)
     # threaded=True so API calls don't block while the engine thread runs.
     app.run(host=args.host, port=args.port, threaded=True)
     return 0

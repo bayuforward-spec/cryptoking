@@ -86,7 +86,8 @@ def main() -> int:
         parser.error("provide --csv <file> or --demo")
 
     strategy = build_strategy(cfg.strategy.name, cfg.strategy.params)
-    bt = Backtester(strategy, cfg.risk, cfg.fees, trend_ratio=args.trend_ratio)
+    bt = Backtester(strategy, cfg.risk, cfg.fees, trend_ratio=args.trend_ratio,
+                    execution=cfg.execution)
     result = bt.run(candles, instrument=args.instrument)
     s = result.stats
 

@@ -17,11 +17,23 @@ log = logging.getLogger("cryptoking")
 
 
 class LiveBroker(Broker):
-    def __init__(self, client: CryptoComClient, quote_currency: str = "USDT"):
+    def __init__(
+        self,
+        client: CryptoComClient,
+        quote_currency: str = "USDT",
+        order_type: str = "market",
+        limit_offset: float = 0.0005,
+    ):
         self.client = client
         self.quote_currency = quote_currency
+        self.order_type = order_type
+        self.limit_offset = limit_offset
         self._positions: dict[str, Position] = {}
         self._cash_cache = self._fetch_cash()
+
+    @property
+    def _is_maker(self) -> bool:
+        return self.order_type.lower() == "limit"
 
     def _fetch_cash(self) -> float:
         try:
@@ -49,10 +61,18 @@ class LiveBroker(Broker):
         return list(self._positions.values())
 
     def buy(self, instrument: str, quote_amount: float, price: float, reason: str) -> Fill:
-        qty = round(quote_amount / price, 6)
-        log.info("LIVE BUY %s qty=%s (~%.2f %s)", instrument, qty, quote_amount, self.quote_currency)
-        self.client.create_order(instrument, "BUY", "MARKET", qty)
-        fill_price = price
+        if self._is_maker:
+            limit_price = round(price * (1 - self.limit_offset), 2)
+            qty = round(quote_amount / limit_price, 6)
+            log.info("LIVE LIMIT BUY %s qty=%s @ %.2f", instrument, qty, limit_price)
+            self.client.create_order(instrument, "BUY", "LIMIT", qty, price=limit_price)
+            fill_price = limit_price
+        else:
+            qty = round(quote_amount / price, 6)
+            log.info("LIVE MARKET BUY %s qty=%s (~%.2f %s)",
+                     instrument, qty, quote_amount, self.quote_currency)
+            self.client.create_order(instrument, "BUY", "MARKET", qty)
+            fill_price = price
         self._positions[instrument] = Position(instrument, qty, fill_price)
         self._cash_cache = self._fetch_cash()
         return Fill(instrument, "BUY", qty, fill_price, 0.0, reason)
@@ -61,9 +81,16 @@ class LiveBroker(Broker):
         pos = self._positions.get(instrument)
         if pos is None:
             raise RuntimeError(f"No position to sell for {instrument}")
-        log.info("LIVE SELL %s qty=%s", instrument, pos.quantity)
-        self.client.create_order(instrument, "SELL", "MARKET", pos.quantity)
+        if self._is_maker:
+            limit_price = round(price * (1 + self.limit_offset), 2)
+            log.info("LIVE LIMIT SELL %s qty=%s @ %.2f", instrument, pos.quantity, limit_price)
+            self.client.create_order(instrument, "SELL", "LIMIT", pos.quantity, price=limit_price)
+            fill_price = limit_price
+        else:
+            log.info("LIVE MARKET SELL %s qty=%s", instrument, pos.quantity)
+            self.client.create_order(instrument, "SELL", "MARKET", pos.quantity)
+            fill_price = price
         qty = pos.quantity
         del self._positions[instrument]
         self._cash_cache = self._fetch_cash()
-        return Fill(instrument, "SELL", qty, price, 0.0, reason)
+        return Fill(instrument, "SELL", qty, fill_price, 0.0, reason)

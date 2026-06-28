@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Sequence
 
 from .analytics import Stats, stats_from_pnls
-from .config import FeesConfig, RiskConfig
+from .config import ExecutionConfig, FeesConfig, RiskConfig
 from .exchange.cryptocom import Candle, Quote
 from .execution.paper import PaperBroker
 from .risk.risk_manager import RiskManager
@@ -69,11 +69,13 @@ class Backtester:
         risk_cfg: RiskConfig,
         fees: FeesConfig,
         trend_ratio: int = 16,
+        execution: ExecutionConfig | None = None,
     ):
         self.strategy = strategy
         self.risk_cfg = risk_cfg
         self.fees = fees
         self.trend_ratio = trend_ratio
+        self.execution = execution or ExecutionConfig()
 
     def run(
         self,
@@ -82,7 +84,12 @@ class Backtester:
         warmup: int = 60,
     ) -> BacktestResult:
         broker = PaperBroker(
-            self.risk_cfg.starting_capital, self.fees.taker_fee, self.fees.slippage
+            self.risk_cfg.starting_capital,
+            self.fees.taker_fee,
+            self.fees.slippage,
+            maker_fee=self.fees.maker_fee,
+            order_type=self.execution.order_type,
+            limit_offset=self.execution.limit_offset,
         )
         risk = RiskManager(self.risk_cfg)
         start_equity = self.risk_cfg.starting_capital

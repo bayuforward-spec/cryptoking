@@ -47,14 +47,23 @@ class Engine:
         self.last_prices: dict[str, float] = {}
 
     def _build_broker(self) -> Broker:
+        ex = self.cfg.execution
         if self.cfg.is_live:
             log.warning("⚠️  LIVE MODE — real orders with real money.")
-            return LiveBroker(self.client, self.cfg.engine.quote_currency)
-        log.info("Paper mode — simulated fills, no real money.")
+            return LiveBroker(
+                self.client,
+                self.cfg.engine.quote_currency,
+                order_type=ex.order_type,
+                limit_offset=ex.limit_offset,
+            )
+        log.info("Paper mode — simulated fills (%s orders), no real money.", ex.order_type)
         return PaperBroker(
             starting_cash=self.cfg.risk.starting_capital,
             taker_fee=self.cfg.fees.taker_fee,
             slippage=self.cfg.fees.slippage,
+            maker_fee=self.cfg.fees.maker_fee,
+            order_type=ex.order_type,
+            limit_offset=ex.limit_offset,
         )
 
     # ----------------------- main loop -----------------------

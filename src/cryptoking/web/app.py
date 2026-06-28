@@ -18,10 +18,10 @@ import logging
 import threading
 from pathlib import Path
 
-from flask import Flask, jsonify, render_template
+from flask import Flask, jsonify, render_template, request
 
 from ..analytics import compute_stats
-from ..config import Config
+from ..config import Config, save_config
 from ..engine import Engine
 
 log = logging.getLogger("cryptoking")
@@ -48,11 +48,65 @@ class BotRunner:
         self.engine.stop()
         return True
 
+    @property
+    def is_running(self) -> bool:
+        return bool(self._thread and self._thread.is_alive())
+
+    def rebuild(self) -> None:
+        """Recreate the Engine from the (mutated) config — used after a settings
+        change. Only valid while stopped."""
+        self.engine = Engine(self.config)
+
     def snapshot(self) -> dict:
         return self.engine.snapshot()
 
 
-def create_app(config: Config, autostart: bool = False) -> Flask:
+def _coerce_like(current, value):
+    """Coerce an incoming JSON value to the type of the current value."""
+    if isinstance(current, bool):
+        if isinstance(value, str):
+            return value.strip().lower() in ("1", "true", "yes", "on")
+        return bool(value)
+    if isinstance(current, int) and not isinstance(current, bool):
+        return int(value)
+    if isinstance(current, float):
+        return float(value)
+    return value
+
+
+def _apply_config_updates(config: Config, body: dict) -> None:
+    """Apply a settings payload onto the live Config dataclasses, with coercion.
+
+    Only a safe allowlist of fields is editable from the dashboard.
+    """
+    eng = body.get("engine", {})
+    if "timeframe" in eng:
+        config.engine.timeframe = str(eng["timeframe"])
+    if "trend_timeframe" in eng:
+        tt = eng["trend_timeframe"]
+        config.engine.trend_timeframe = str(tt) if tt else None
+    if "poll_interval_seconds" in eng:
+        config.engine.poll_interval_seconds = int(eng["poll_interval_seconds"])
+
+    for key, val in (body.get("strategy", {}).get("params", {}) or {}).items():
+        if key in config.strategy.params:
+            config.strategy.params[key] = _coerce_like(config.strategy.params[key], val)
+
+    for key, val in (body.get("risk", {}) or {}).items():
+        if hasattr(config.risk, key):
+            setattr(config.risk, key, _coerce_like(getattr(config.risk, key), val))
+
+    ex = body.get("execution", {}) or {}
+    if "order_type" in ex:
+        ot = str(ex["order_type"]).lower()
+        if ot not in ("market", "limit"):
+            raise ValueError("order_type must be 'market' or 'limit'")
+        config.execution.order_type = ot
+    if "limit_offset" in ex:
+        config.execution.limit_offset = float(ex["limit_offset"])
+
+
+def create_app(config: Config, autostart: bool = False, config_path: str = "config.yaml") -> Flask:
     app = Flask(__name__)
     runner = BotRunner(config)
     if autostart:
@@ -80,6 +134,44 @@ def create_app(config: Config, autostart: bool = False) -> Flask:
     @app.get("/api/stats")
     def stats():
         return jsonify(compute_stats(config.logging.trades_csv).as_dict())
+
+    @app.get("/api/config")
+    def get_config():
+        return jsonify(
+            {
+                "running": runner.is_running,
+                "engine": {
+                    "timeframe": config.engine.timeframe,
+                    "trend_timeframe": config.engine.trend_timeframe,
+                    "poll_interval_seconds": config.engine.poll_interval_seconds,
+                },
+                "strategy": {"name": config.strategy.name, "params": config.strategy.params},
+                "risk": {
+                    "risk_per_trade": config.risk.risk_per_trade,
+                    "rr_ratio": config.risk.rr_ratio,
+                    "stop_loss_pct": config.risk.stop_loss_pct,
+                    "max_open_positions": config.risk.max_open_positions,
+                    "max_daily_loss_pct": config.risk.max_daily_loss_pct,
+                },
+                "execution": {
+                    "order_type": config.execution.order_type,
+                    "limit_offset": config.execution.limit_offset,
+                },
+            }
+        )
+
+    @app.post("/api/config")
+    def update_config():
+        if runner.is_running:
+            return jsonify({"ok": False, "error": "stop the bot before changing settings"}), 409
+        body = request.get_json(silent=True) or {}
+        try:
+            _apply_config_updates(config, body)
+        except (ValueError, TypeError) as exc:
+            return jsonify({"ok": False, "error": f"invalid value: {exc}"}), 400
+        save_config(config, config_path)
+        runner.rebuild()  # pick up new settings on next start
+        return jsonify({"ok": True})
 
     @app.post("/api/start")
     def start():

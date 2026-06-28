@@ -47,6 +47,13 @@ risk:
   # Max number of concurrent open positions across all instruments.
   max_open_positions: 2
 
+execution:
+  # "market" = taker (instant, higher fee). "limit" = maker (posts inside the
+  # spread, lower fee — strongly preferred for frequent trading; see README).
+  order_type: limit
+  # For limit orders: how far inside the spread to post, as a fraction of price.
+  limit_offset: 0.0005
+
 fees:
   # Round-trip estimate used by the strategy/risk layer (taker buy + taker sell).
   # Crypto.com spot taker ~0.075% each side. Tune to YOUR actual fee tier.
