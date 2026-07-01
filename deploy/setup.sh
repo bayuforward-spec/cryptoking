@@ -1,15 +1,31 @@
 #!/usr/bin/env bash
-# One-shot provisioning for an Ubuntu VM (e.g. Oracle Cloud Always Free).
-# Run from the repo root after cloning: bash deploy/setup.sh
+# One-shot provisioning for a fresh Linux VM (Ubuntu OR Oracle Linux / RHEL).
+# Auto-detects the package manager and the login user, and generates systemd
+# unit files with the correct user + paths. Run from the repo root:
+#     bash deploy/setup.sh
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+REPO_DIR="$(pwd)"
+RUN_USER="$(whoami)"
+
 echo "==> Installing system packages"
-sudo apt-get update -y
-sudo apt-get install -y python3 python3-venv python3-pip git
+if command -v apt-get >/dev/null 2>&1; then
+  sudo apt-get update -y
+  sudo apt-get install -y python3 python3-venv python3-pip git
+  PYBIN=python3
+elif command -v dnf >/dev/null 2>&1; then
+  # Oracle Linux / RHEL / Fedora. Prefer Python 3.11 for modern syntax.
+  sudo dnf install -y python3.11 python3.11-pip git || sudo dnf install -y python3 python3-pip git
+  if command -v python3.11 >/dev/null 2>&1; then PYBIN=python3.11; else PYBIN=python3; fi
+else
+  echo "!! No apt-get or dnf found. Install Python 3.11+, pip, and git manually." >&2
+  exit 1
+fi
+echo "==> Using interpreter: $PYBIN ($($PYBIN --version 2>&1))"
 
 echo "==> Creating virtualenv + installing deps"
-python3 -m venv .venv
+$PYBIN -m venv .venv
 .venv/bin/pip install --upgrade pip
 .venv/bin/pip install -r requirements.txt
 
@@ -20,7 +36,41 @@ fi
 
 chmod +x deploy/retune.sh
 
-cat <<'EOF'
+echo "==> Generating systemd unit files for user '$RUN_USER' at '$REPO_DIR'"
+cat > deploy/cryptoking.service <<EOF
+[Unit]
+Description=CryptoKing trading bot (web dashboard + engine)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=${RUN_USER}
+WorkingDirectory=${REPO_DIR}
+EnvironmentFile=${REPO_DIR}/.env
+ExecStart=${REPO_DIR}/.venv/bin/python webapp.py --host 127.0.0.1 --port 8000
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+cat > deploy/cryptoking-learn.service <<EOF
+[Unit]
+Description=CryptoKing self-learning re-tune (fetch candles + walk-forward)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=${RUN_USER}
+WorkingDirectory=${REPO_DIR}
+EnvironmentFile=${REPO_DIR}/.env
+ExecStart=${REPO_DIR}/deploy/retune.sh
+EOF
+
+cat <<EOF
 
 ==> Done. Next steps:
 
@@ -39,12 +89,10 @@ cat <<'EOF'
        sudo systemctl enable --now cryptoking.service
        sudo systemctl enable --now cryptoking-learn.timer
 
-4. View the dashboard from your laptop via SSH tunnel:
-       ssh -L 8000:localhost:8000 ubuntu@<VM_PUBLIC_IP>
+4. View the dashboard from your laptop via SSH tunnel (use your login user):
+       ssh -i <key> -L 8000:localhost:8000 ${RUN_USER}@<VM_PUBLIC_IP>
    then open http://localhost:8000
 
 5. Logs:
        journalctl -u cryptoking -f
-
-If your VM user isn't "ubuntu", edit the User= and paths in the .service files.
 EOF

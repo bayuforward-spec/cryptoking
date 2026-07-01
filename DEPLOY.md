@@ -25,12 +25,18 @@ bot restarts automatically on crash or reboot.
 
 ## 2. Connect and clone
 
+Use the **username Oracle shows on the instance page** — `ubuntu` for an Ubuntu
+image, `opc` for an Oracle Linux image:
+
 ```bash
-ssh ubuntu@<VM_PUBLIC_IP>
+ssh -i <your-key.key> <ubuntu|opc>@<VM_PUBLIC_IP>
 git clone https://github.com/bayuforward-spec/cryptoking.git
 cd cryptoking
 git checkout claude/crypto-trading-bot-cy5qq2
 ```
+
+`deploy/setup.sh` auto-detects the OS (apt/dnf) and generates the systemd units
+for your login user — it works on both Ubuntu and Oracle Linux.
 
 ## 3. One-command setup
 
