@@ -114,72 +114,84 @@ class Engine:
         quotes: dict[str, Quote] = {}
 
         for inst in self.cfg.engine.instruments:
-            quote = self.client.get_quote(inst)
-            candles = self.client.get_candles(inst, self.cfg.engine.timeframe)
-            trend_candles = None
-            if self.cfg.engine.trend_timeframe:
-                trend_candles = self.client.get_candles(
-                    inst, self.cfg.engine.trend_timeframe
-                )
-            quotes[inst] = quote
-            prices[inst] = quote.mid
+            # Per-instrument isolation: a single bad symbol (delisted, transient
+            # API error) must not abort the whole pass and freeze every price.
+            try:
+                quote = self.client.get_quote(inst)
+                candles = self.client.get_candles(inst, self.cfg.engine.timeframe)
+                trend_candles = None
+                if self.cfg.engine.trend_timeframe:
+                    trend_candles = self.client.get_candles(
+                        inst, self.cfg.engine.trend_timeframe
+                    )
+                quotes[inst] = quote
+                prices[inst] = quote.mid
 
-            pos = self.broker.get_position(inst)
-            signal = self.strategy.evaluate(
-                candles, quote, in_position=pos is not None, trend_candles=trend_candles
-            )
-            self.last_signals[inst] = {
-                "action": signal.action,
-                "reason": signal.reason,
-                "meta": signal.meta,
-            }
-
-            if pos is not None:
-                # Risk-based exits take priority over strategy exits.
-                trigger = self.risk.exit_for_stop_or_target(pos, quote.mid)
-                if trigger:
-                    self._close(inst, quote.mid, trigger)
-                    continue
-                if signal.action == "SELL":
-                    self._close(inst, quote.mid, signal.reason)
-                continue
-
-            if signal.action == "BUY":
-                equity = self.broker.equity(prices)
-                decision = self.risk.size_entry(
-                    equity,
-                    quote.mid,
-                    len(self.broker.open_positions()),
-                    stop_price=signal.stop_price,
+                pos = self.broker.get_position(inst)
+                signal = self.strategy.evaluate(
+                    candles, quote, in_position=pos is not None, trend_candles=trend_candles
                 )
-                if not decision.allowed:
-                    log.debug("Entry blocked for %s: %s", inst, decision.reason)
-                    continue
-                # Optional AI confirmation before committing the entry.
-                verdict = self.analyst.review(
-                    {
-                        "instrument": inst,
-                        "price": round(quote.mid, 2),
-                        "proposed_stop": round(signal.stop_price, 2) if signal.stop_price else None,
-                        "strategy_reason": signal.reason,
-                        "signal_meta": signal.meta,
-                    }
-                )
-                self.last_signals[inst]["ai"] = {
-                    "proceed": verdict.proceed,
-                    "confidence": round(verdict.confidence, 2),
-                    "reason": verdict.reason,
+                self.last_signals[inst] = {
+                    "action": signal.action,
+                    "reason": signal.reason,
+                    "meta": signal.meta,
                 }
-                if not verdict.proceed:
-                    log.info("AI vetoed %s entry: %s", inst, verdict.reason)
+
+                if pos is not None:
+                    # Risk-based exits take priority over strategy exits.
+                    trigger = self.risk.exit_for_stop_or_target(pos, quote.mid)
+                    if trigger:
+                        self._close(inst, quote.mid, trigger)
+                        continue
+                    if signal.action == "SELL":
+                        self._close(inst, quote.mid, signal.reason)
                     continue
-                reason = signal.reason
-                if self.analyst.enabled:
-                    reason = f"{signal.reason} | AI ok ({verdict.confidence:.2f})"
-                self._open(
-                    inst, decision.quote_amount, quote.mid, reason,
-                    signal.stop_price, signal.target_price,
-                )
+
+                if signal.action == "BUY":
+                    equity = self.broker.equity(prices)
+                    decision = self.risk.size_entry(
+                        equity,
+                        quote.mid,
+                        len(self.broker.open_positions()),
+                        stop_price=signal.stop_price,
+                    )
+                    if not decision.allowed:
+                        log.debug("Entry blocked for %s: %s", inst, decision.reason)
+                        continue
+                    # Optional AI confirmation before committing the entry.
+                    verdict = self.analyst.review(
+                        {
+                            "instrument": inst,
+                            "price": round(quote.mid, 2),
+                            "proposed_stop": round(signal.stop_price, 2) if signal.stop_price else None,
+                            "strategy_reason": signal.reason,
+                            "signal_meta": signal.meta,
+                        }
+                    )
+                    self.last_signals[inst]["ai"] = {
+                        "proceed": verdict.proceed,
+                        "confidence": round(verdict.confidence, 2),
+                        "reason": verdict.reason,
+                    }
+                    if not verdict.proceed:
+                        log.info("AI vetoed %s entry: %s", inst, verdict.reason)
+                        continue
+                    reason = signal.reason
+                    if self.analyst.enabled:
+                        reason = f"{signal.reason} | AI ok ({verdict.confidence:.2f})"
+                    self._open(
+                        inst, decision.quote_amount, quote.mid, reason,
+                        signal.stop_price, signal.target_price,
+                    )
+            except Exception as e:  # noqa: BLE001 — never let one symbol kill the loop
+                log.warning("skip %s this pass: %s", inst, e)
+                self.last_signals[inst] = {
+                    "action": "HOLD",
+                    "reason": f"data unavailable ({e})",
+                    "meta": {},
+                }
+                self.last_error = f"{inst}: {e}"
+                continue
 
         equity = self.broker.equity(prices)
         self.risk.update_equity(equity)
