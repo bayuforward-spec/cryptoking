@@ -8,6 +8,10 @@ engine:
   instruments:
     - BTC_USDT
     - ETH_USDT
+    - SOL_USDT
+    - AAVE_USDT
+    - SUI_USDT
+    - XRP_USDT
   # Execution timeframe — where entries are found (the guide's 4h/lower TF).
   timeframe: "15m"
   # Higher timeframe for top-down DIRECTION (the guide's weekly/daily context).
