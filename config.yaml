@@ -12,7 +12,7 @@ engine:
     - AAVE_USDT
     - SUI_USDT
     - XRP_USDT
-    - BNB_USDT
+    - LTC_USDT
     - ADA_USDT
     - AVAX_USDT
     - LINK_USDT
