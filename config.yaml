@@ -12,13 +12,14 @@ engine:
     - AAVE_USDT
     - SUI_USDT
     - XRP_USDT
-  # Execution timeframe — where entries are found (the guide's 4h/lower TF).
-  timeframe: "15m"
-  # Higher timeframe for top-down DIRECTION (the guide's weekly/daily context).
+  # Execution timeframe — where entries are found. KJO-style: swing on the 4h.
+  timeframe: "4h"
+  # Higher timeframe for top-down DIRECTION. KJO-style: the daily sets the bias.
   # Set to null to disable top-down and use only the execution timeframe.
-  trend_timeframe: "4h"
-  # How often (seconds) the main loop wakes up to evaluate.
-  poll_interval_seconds: 15
+  trend_timeframe: "1D"
+  # How often (seconds) the main loop wakes up to evaluate. On big timeframes a
+  # slower poll is plenty (candles only close every 4h) and lighter on the API.
+  poll_interval_seconds: 60
   # Quote currency used for balances / sizing.
   quote_currency: USDT
 
