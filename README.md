@@ -10,6 +10,9 @@ so you can validate everything before risking a cent.
 
 > 🇮🇩 **Panduan lengkap berbahasa Indonesia (dari nol sampai jalan): [PANDUAN.md](PANDUAN.md)**
 > — Step-by-step untuk pemula. Teknis deploy: [DEPLOY.md](DEPLOY.md).
+>
+> 📊 **Analisa metode trading (dari chart KJO Academy): [ANALISA_TRADING.md](ANALISA_TRADING.md)**
+> — bedah setup entry/TP/SL di gambar dan pemetaannya ke kode.
 
 ---
 
@@ -248,6 +251,12 @@ shorting needs futures/margin, intentionally out of scope here).
 
 **Fibonacci golden pocket** — it draws the retracement of the last up-impulse and
 only enters when price has pulled back into the 0.618–0.786 "golden pocket" (support).
+
+**Take-profit targets, chart-style** — like the KJO charts, every BUY also carries
+the next **Fibonacci extension** targets (1.618 / 2.618…) and horizontal
+**support/resistance** levels. Set `strategy.params.target_mode` to `fib_ext` or
+`resistance` to place the take-profit at the nearest such level (clearing `min_rr`),
+instead of the flat reward:risk multiple (`rr`, default).
 
 **Candlestick confirmation** — entry requires a bullish reversal candle (hammer,
 bullish engulfing, tweezer bottom, or marubozu) in that pocket.

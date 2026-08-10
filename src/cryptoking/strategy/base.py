@@ -19,6 +19,10 @@ class Signal:
     # Suggested protective stop price (the guide places it beyond structure).
     # When set, the risk manager sizes the position from this stop distance.
     stop_price: float | None = None
+    # Optional explicit take-profit price (e.g. a Fibonacci-extension or
+    # support/resistance target, as the KJO charts mark). When set, it overrides
+    # the risk manager's flat reward:risk target for this entry.
+    target_price: float | None = None
     meta: dict[str, Any] = field(default_factory=dict)
 
 

@@ -142,7 +142,7 @@ class Backtester:
                     cost_basis[instrument] = fill.quantity * fill.price + fill.fee
                     p = broker.get_position(instrument)
                     p.stop_price = risk.stop_for(fill.price, signal.stop_price)
-                    p.target_price = risk.target_for(fill.price, signal.stop_price)
+                    p.target_price = risk.target_for(fill.price, signal.stop_price, signal.target_price)
                     trades.append(
                         {"side": "BUY", "price": fill.price, "qty": fill.quantity,
                          "reason": signal.reason, "pnl": 0.0}

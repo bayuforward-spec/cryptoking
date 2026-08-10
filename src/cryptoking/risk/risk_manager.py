@@ -87,8 +87,20 @@ class RiskManager:
 
         return RiskDecision(True, quote_amount=quote_amount, reason="ok")
 
-    def target_for(self, entry_price: float, stop_price: float | None) -> float:
-        """Take-profit price from the reward-to-risk multiple."""
+    def target_for(
+        self,
+        entry_price: float,
+        stop_price: float | None,
+        signal_target: float | None = None,
+    ) -> float:
+        """Take-profit price.
+
+        If the strategy supplies an explicit `signal_target` above entry (a
+        Fibonacci-extension or support/resistance level, as the KJO charts
+        mark), use it. Otherwise fall back to the flat reward-to-risk multiple.
+        """
+        if signal_target is not None and signal_target > entry_price:
+            return signal_target
         if stop_price is not None:
             risk_dist = entry_price - stop_price
             return entry_price + self.cfg.rr_ratio * risk_dist

@@ -24,9 +24,12 @@ from typing import Sequence
 from ..exchange.cryptocom import Candle, Quote
 from ..patterns import bearish_reversal, bullish_reversal
 from ..structure import (
+    fib_extension,
     fib_retracement,
     last_up_impulse,
+    levels_relative_to,
     market_structure,
+    support_resistance,
 )
 from .base import Signal, Strategy
 
@@ -40,11 +43,15 @@ class StructureFibStrategy(Strategy):
         require_candle_pattern: bool = True,
         stop_buffer: float = 0.0015,   # place stop this fraction below swing low
         allow_range_entries: bool = False,
+        target_mode: str = "rr",       # "rr" | "fib_ext" | "resistance"
+        min_rr: float = 1.0,           # ignore targets closer than this R:R
     ):
         self.swing_k = swing_k
         self.require_candle_pattern = require_candle_pattern
         self.stop_buffer = stop_buffer
         self.allow_range_entries = allow_range_entries
+        self.target_mode = target_mode
+        self.min_rr = min_rr
 
     def evaluate(
         self,
@@ -106,10 +113,31 @@ class StructureFibStrategy(Strategy):
         if stop_price >= price:
             return Signal("HOLD", reason="stop not below price", meta=meta)
 
+        # ---- Take-profit targets, the way the KJO charts mark them ----
+        # Fibonacci extensions projected above the impulse high (1.618, 2.618…).
+        ext = [e for e in fib_extension(low, high) if e > price]
+        meta["fib_targets"] = [round(e, 4) for e in ext]
+        # Horizontal support/resistance; resistances above price are TP levels.
+        levels = levels_relative_to(support_resistance(candles, self.swing_k), price)
+        resistances = sorted(lv.price for lv in levels if lv.kind == "resistance")
+        meta["resistances"] = [round(r, 4) for r in resistances]
+
+        # Optionally set an explicit target (the nearest level giving >= min_rr).
+        risk_dist = price - stop_price
+        target_price = None
+        if self.target_mode in ("fib_ext", "resistance"):
+            pool = ext if self.target_mode == "fib_ext" else resistances
+            viable = [t for t in pool if (t - price) >= self.min_rr * risk_dist]
+            if viable:
+                target_price = min(viable)  # nearest that clears the R:R floor
+                meta["target"] = round(target_price, 4)
+                meta["target_rr"] = round((target_price - price) / risk_dist, 2)
+
         return Signal(
             "BUY",
             reason=f"uptrend + golden pocket + {meta['pattern']}",
             confidence=0.7,
             stop_price=stop_price,
+            target_price=target_price,
             meta=meta,
         )

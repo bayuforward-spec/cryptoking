@@ -28,6 +28,12 @@ strategy:
     require_candle_pattern: true # require a bullish reversal candle to enter
     stop_buffer: 0.0015         # place stop this fraction below the swing low
     allow_range_entries: false  # only enter in confirmed uptrends
+    # Take-profit target, the way the KJO charts mark it:
+    #   rr         — flat reward:risk multiple (risk.rr_ratio) [default]
+    #   fib_ext    — nearest Fibonacci extension (1.618/2.618…) above entry
+    #   resistance — nearest horizontal resistance above entry
+    target_mode: rr
+    min_rr: 1.0                 # ignore TP levels closer than this reward:risk
 
 risk:
   # Capital allocated to the bot (quote currency). PAPER mode starts with this.

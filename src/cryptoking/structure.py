@@ -16,6 +16,11 @@ from .exchange.cryptocom import Candle
 FIB_RATIOS = [0.0, 0.236, 0.5, 0.618, 0.786, 1.0]
 GOLDEN_LOW, GOLDEN_HIGH = 0.618, 0.786
 
+# Fibonacci EXTENSION ratios — projected ABOVE the impulse high, used by the
+# KJO Academy charts as take-profit targets (e.g. the "1.618", "2.618" TP
+# labels on the AAVE / HYPE setups).
+FIB_EXT_RATIOS = [1.272, 1.618, 2.0, 2.618]
+
 
 @dataclass
 class SwingPoint:
@@ -100,6 +105,63 @@ def fib_retracement(low: float, high: float) -> Fib:
         golden_low=high - span * GOLDEN_LOW,
         golden_high=high - span * GOLDEN_HIGH,
     )
+
+
+def fib_extension(low: float, high: float, ratios: Sequence[float] = FIB_EXT_RATIOS) -> list[float]:
+    """Fibonacci extension targets of an up-impulse, projected above `high`.
+
+    Extension price = low + span * ratio (ratio > 1), i.e. the impulse leg
+    measured forward. These are the TP targets the KJO charts label 1.618 /
+    2.618, etc. Returns prices in ascending order.
+    """
+    span = high - low
+    return [low + span * r for r in ratios]
+
+
+@dataclass
+class Level:
+    price: float
+    touches: int
+    kind: str  # "support" | "resistance" (relative to a reference price)
+
+
+def support_resistance(
+    candles: Sequence[Candle],
+    k: int = 3,
+    tol: float = 0.005,
+) -> list[Level]:
+    """Cluster swing points into horizontal support/resistance levels.
+
+    The KJO setups draw several horizontal lines (the white price labels) and
+    use them both as pullback references and as take-profit targets. Here we
+    take fractal swing highs/lows and merge any within `tol` (fractional price
+    distance) into one level, weighting by how many swings touched it — a level
+    tested more often is stronger. `kind` is left unset ("") until compared to a
+    reference price by :func:`levels_relative_to`.
+    """
+    pts = swing_points(candles, k)
+    prices = sorted(p.price for p in pts)
+    if not prices:
+        return []
+    clusters: list[list[float]] = [[prices[0]]]
+    for p in prices[1:]:
+        anchor = clusters[-1][0]
+        if anchor > 0 and abs(p - anchor) / anchor <= tol:
+            clusters[-1].append(p)
+        else:
+            clusters.append([p])
+    levels: list[Level] = []
+    for c in clusters:
+        levels.append(Level(price=sum(c) / len(c), touches=len(c), kind=""))
+    return levels
+
+
+def levels_relative_to(levels: Sequence[Level], price: float) -> list[Level]:
+    """Tag levels as support (<= price) or resistance (> price) for a reference."""
+    out: list[Level] = []
+    for lv in levels:
+        out.append(Level(lv.price, lv.touches, "resistance" if lv.price > price else "support"))
+    return out
 
 
 def last_up_impulse(candles: Sequence[Candle], k: int = 3) -> tuple[float, float] | None:

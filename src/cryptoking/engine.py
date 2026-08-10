@@ -176,7 +176,10 @@ class Engine:
                 reason = signal.reason
                 if self.analyst.enabled:
                     reason = f"{signal.reason} | AI ok ({verdict.confidence:.2f})"
-                self._open(inst, decision.quote_amount, quote.mid, reason, signal.stop_price)
+                self._open(
+                    inst, decision.quote_amount, quote.mid, reason,
+                    signal.stop_price, signal.target_price,
+                )
 
         equity = self.broker.equity(prices)
         self.risk.update_equity(equity)
@@ -234,14 +237,17 @@ class Engine:
         price: float,
         reason: str,
         stop_price: float | None = None,
+        target_price: float | None = None,
     ) -> None:
         fill = self.broker.buy(inst, quote_amount, price, reason)
         self._cost_basis[inst] = fill.quantity * fill.price + fill.fee
-        # Attach structure-based stop + R:R target to the open position.
+        # Attach structure-based stop + take-profit to the open position. The
+        # target is the strategy's explicit level (fib-ext / S-R) when given,
+        # else the flat R:R multiple.
         pos = self.broker.get_position(inst)
         if pos is not None:
             pos.stop_price = self.risk.stop_for(fill.price, stop_price)
-            pos.target_price = self.risk.target_for(fill.price, stop_price)
+            pos.target_price = self.risk.target_for(fill.price, stop_price, target_price)
         self._record(fill, realized=0.0)
         log.info(
             "OPEN  %s qty=%.6f @ %.2f stop=%.2f target=%.2f (%s)",

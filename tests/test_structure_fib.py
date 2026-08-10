@@ -51,3 +51,28 @@ def test_buy_sets_stop_below_price():
     # if it buys, the stop must be valid.
     if sig.action == "BUY":
         assert sig.stop_price is not None and sig.stop_price < 103.4
+        # KJO-style TP context is always attached on a BUY.
+        assert "fib_targets" in sig.meta
+        assert "resistances" in sig.meta
+
+
+def _buy_setup():
+    closes = [100, 98, 96, 100, 108, 114, 120]
+    candles = mk(closes)
+    candles.append(Candle(t=99, o=103.5, h=103.8, l=99.0, c=103.4, v=1.0))
+    return candles
+
+
+def test_target_mode_rr_leaves_target_none():
+    s = StructureFibStrategy(swing_k=2, target_mode="rr")
+    sig = s.evaluate(_buy_setup(), q(103.4), in_position=False)
+    if sig.action == "BUY":
+        assert sig.target_price is None  # risk manager applies the flat R:R
+
+
+def test_target_mode_fib_ext_sets_target_above_price():
+    s = StructureFibStrategy(swing_k=2, target_mode="fib_ext", min_rr=1.0)
+    sig = s.evaluate(_buy_setup(), q(103.4), in_position=False)
+    if sig.action == "BUY" and sig.target_price is not None:
+        assert sig.target_price > 103.4
+        assert sig.meta.get("target_rr", 0) >= 1.0
