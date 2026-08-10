@@ -9,7 +9,7 @@ User=ubuntu
 WorkingDirectory=/home/ubuntu/cryptoking
 # .env holds MODE and (for live) the crypto.com + Anthropic keys.
 EnvironmentFile=/home/ubuntu/cryptoking/.env
-ExecStart=/home/ubuntu/cryptoking/.venv/bin/python webapp.py --host 127.0.0.1 --port 8000
+ExecStart=/home/ubuntu/cryptoking/.venv/bin/python webapp.py --host 127.0.0.1 --port 8000 --autostart
 Restart=always
 RestartSec=5
 # Keep the dashboard bound to localhost; reach it via SSH tunnel (see DEPLOY.md).

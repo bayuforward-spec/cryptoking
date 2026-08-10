@@ -48,7 +48,7 @@ Type=simple
 User=${RUN_USER}
 WorkingDirectory=${REPO_DIR}
 EnvironmentFile=${REPO_DIR}/.env
-ExecStart=${REPO_DIR}/.venv/bin/python webapp.py --host 127.0.0.1 --port 8000
+ExecStart=${REPO_DIR}/.venv/bin/python webapp.py --host 127.0.0.1 --port 8000 --autostart
 Restart=always
 RestartSec=5
 

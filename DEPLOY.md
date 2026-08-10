@@ -32,7 +32,7 @@ image, `opc` for an Oracle Linux image:
 ssh -i <your-key.key> <ubuntu|opc>@<VM_PUBLIC_IP>
 git clone https://github.com/bayuforward-spec/cryptoking.git
 cd cryptoking
-git checkout claude/crypto-trading-bot-cy5qq2
+git checkout claude/trading-analysis-file-ok9w8y
 ```
 
 `deploy/setup.sh` auto-detects the OS (apt/dnf) and generates the systemd units
@@ -88,8 +88,9 @@ The dashboard binds to `127.0.0.1` on the VM. Tunnel it to your laptop:
 ssh -L 8000:localhost:8000 ubuntu@<VM_PUBLIC_IP>
 ```
 
-Then open <http://localhost:8000> in your browser. Use the **Start** button to
-begin trading (or set `--autostart` in the service). Nothing is exposed publicly.
+Then open <http://localhost:8000> in your browser. The service already launches
+with `--autostart`, so the bot begins trading on boot — the dashboard is just for
+monitoring (and Stop/Start if you want manual control). Nothing is exposed publicly.
 
 > If you ever must expose it directly, put it behind an authenticated reverse
 > proxy (Caddy/nginx + basic auth or OAuth) and HTTPS — never raw, especially live.
