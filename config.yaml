@@ -12,6 +12,12 @@ engine:
     - AAVE_USDT
     - SUI_USDT
     - XRP_USDT
+    - BNB_USDT
+    - ADA_USDT
+    - AVAX_USDT
+    - LINK_USDT
+    - DOGE_USDT
+    - DOT_USDT
   # Execution timeframe — where entries are found. KJO-style: swing on the 4h.
   timeframe: "4h"
   # Higher timeframe for top-down DIRECTION. KJO-style: the daily sets the bias.
