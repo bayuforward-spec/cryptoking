@@ -48,7 +48,7 @@ strategy:
 
 risk:
   # Capital allocated to the bot (quote currency). PAPER mode starts with this.
-  starting_capital: 200.0
+  starting_capital: 2000.0
   # Fraction of equity risked per trade (the guide: 1%, never above 2%).
   risk_per_trade: 0.01
   # Max fraction of equity deployed in a single position.
