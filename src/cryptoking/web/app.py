@@ -24,6 +24,7 @@ from ..analytics import compute_stats
 from ..config import Config, save_config
 from ..engine import Engine
 from ..learn import Metrics, Proposal, apply_proposal, read_proposal
+from ..scanner import DEFAULT_WATCHLIST, scan_market
 
 log = logging.getLogger("cryptoking")
 
@@ -143,6 +144,21 @@ def create_app(config: Config, autostart: bool = False, config_path: str = "conf
     @app.get("/api/stats")
     def stats():
         return jsonify(compute_stats(config.logging.trades_csv).as_dict())
+
+    @app.get("/api/scan")
+    def scan():
+        exec_tf = config.engine.timeframe
+        trend_tf = config.engine.trend_timeframe or config.engine.timeframe
+        try:
+            rows = scan_market(runner.engine.client, DEFAULT_WATCHLIST, exec_tf, trend_tf)
+        except Exception as exc:
+            return jsonify({"ok": False, "error": str(exc)}), 502
+        return jsonify({
+            "ok": True,
+            "exec_timeframe": exec_tf,
+            "trend_timeframe": trend_tf,
+            "rows": [r.as_dict() for r in rows],
+        })
 
     @app.get("/api/config")
     def get_config():

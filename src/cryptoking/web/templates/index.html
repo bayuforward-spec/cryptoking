@@ -50,6 +50,13 @@
   .field label { color: var(--muted); font-size: 12px; }
   .field input, .field select { background: var(--panel2); border: 1px solid var(--line);
     color: var(--text); border-radius: 8px; padding: 8px 10px; font-size: 14px; }
+  .tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; }
+  th.num { text-align: right; }
+  .tpill { padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+  .tpill.up { background: #1f3a2e; color: var(--green); }
+  .tpill.down { background: #3a1f25; color: var(--red); }
+  .tpill.range { background: #3a2f12; color: var(--accent); }
+  .scanpick { background: var(--panel2); border: 1px solid var(--accent); border-radius: 12px; padding: 14px 16px; margin-bottom: 12px; }
 </style>
 </head>
 <body>
@@ -82,6 +89,22 @@
       <div class="card"><div class="label">Profit factor</div><div class="value" id="pf">—</div></div>
       <div class="card"><div class="label">Reward : Risk</div><div class="value" id="rr">—</div></div>
       <div class="card"><div class="label">Closed trades</div><div class="value" id="closed">—</div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Market Scanner <span class="ts">(top large-caps · crypto.com data · strategi struktur+fib+candle)</span></h2>
+    <div style="margin-bottom:10px;display:flex;gap:10px;align-items:center;">
+      <button onclick="runScan()" id="scanBtn">🔍 Scan Market</button>
+      <span id="scanMsg" class="ts"></span>
+    </div>
+    <div id="scanPick"></div>
+    <div class="tablewrap" id="scanWrap" style="display:none;">
+      <table>
+        <thead><tr><th>Coin</th><th class="num">Price</th><th>Trend</th><th>Pocket</th><th>Candle</th>
+          <th class="num">Entry</th><th class="num">SL</th><th class="num">TP1</th><th class="num">TP2</th><th class="num">Risk%</th><th class="num">Score</th></tr></thead>
+        <tbody id="scanRows"></tbody>
+      </table>
     </div>
   </section>
 
@@ -176,6 +199,50 @@ const fmt = (n, d=2) => (n === null || n === undefined || n === "") ? "—" : Nu
 const cls = n => Number(n) > 0 ? "pos" : Number(n) < 0 ? "neg" : "";
 
 async function post(url){ try { await fetch(url, {method:"POST"}); refresh(); loadSettings(); } catch(e){} }
+
+function trendPill(t){
+  const c = t==="uptrend"?"up":t==="downtrend"?"down":"range";
+  const l = t==="uptrend"?"Uptrend":t==="downtrend"?"Downtrend":"Ranging";
+  return `<span class="tpill ${c}">${l}</span>`;
+}
+async function runScan(){
+  const btn = document.getElementById("scanBtn");
+  const msg = document.getElementById("scanMsg");
+  btn.disabled = true; msg.textContent = "mengambil data crypto.com…";
+  try {
+    const r = await (await fetch("/api/scan")).json();
+    if (!r.ok){ msg.textContent = "⚠️ " + (r.error||"gagal"); btn.disabled=false; return; }
+    const rows = r.rows||[];
+    const ok = rows.filter(x=>!x.error);
+    const best = ok.find(x=>x.actionable);
+    const pick = document.getElementById("scanPick");
+    if (best){
+      pick.innerHTML = `<div class="scanpick"><b style="color:var(--accent)">⭐ Paling potensial: ${best.instrument}</b>
+        — ${trendPill(best.trend)} · golden pocket ✓ · candle <b>${best.candle}</b> · skor <b>${best.score}</b>/100 · R:R ${best.rr}:1<br>
+        Entry ${fmt(best.entry)} · SL <span class="neg">${fmt(best.stop)}</span> · TP1 <span class="pos">${fmt(best.tp1)}</span> · TP2 <span class="pos">${fmt(best.tp2)}</span></div>`;
+    } else {
+      pick.innerHTML = `<div class="scanpick" style="border-color:var(--accent)"><b style="color:var(--accent)">Tidak ada setup LONG valid.</b>
+        Tidak ada koin uptrend + golden pocket + candle bullish. Aturannya: <b>WAIT / cash</b>.</div>`;
+    }
+    const tb = document.getElementById("scanRows"); tb.innerHTML = "";
+    rows.forEach(x=>{
+      const tr = document.createElement("tr");
+      if (x.error){ tr.innerHTML = `<td>${x.instrument}</td><td colspan="10" style="color:var(--muted)">error: ${x.error}</td>`; tb.appendChild(tr); return; }
+      if (best && x.instrument===best.instrument) tr.style.background = "rgba(245,179,1,.08)";
+      tr.innerHTML = `<td><b>${x.instrument.replace('_USDT','')}</b></td>
+        <td class="num">${fmt(x.price)}</td><td>${trendPill(x.trend)}</td>
+        <td>${x.in_pocket?'<span class="pos">✓</span>':'–'}</td><td>${x.candle||'–'}</td>
+        <td class="num">${fmt(x.entry)}</td><td class="num neg">${fmt(x.stop)}</td>
+        <td class="num pos">${fmt(x.tp1)}</td><td class="num pos">${fmt(x.tp2)}</td>
+        <td class="num">${x.risk_pct!=null?x.risk_pct.toFixed(2):'–'}</td>
+        <td class="num"><b style="color:${x.score>=60?'var(--green)':x.score>=40?'var(--accent)':'var(--muted)'}">${x.score}</b></td>`;
+      tb.appendChild(tr);
+    });
+    document.getElementById("scanWrap").style.display = "block";
+    msg.textContent = `${ok.length}/${rows.length} koin · ${r.exec_timeframe}/${r.trend_timeframe} · ` + new Date().toLocaleTimeString();
+  } catch(e){ msg.textContent = "⚠️ error"; }
+  btn.disabled = false;
+}
 
 let settingsDirty = false;
 ["set_order_type","set_timeframe","set_trend_timeframe","set_risk_per_trade","set_rr_ratio",

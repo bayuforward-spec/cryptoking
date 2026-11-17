@@ -192,6 +192,22 @@ pip install anthropic
 > part of the bot's decision-making. It does **not** host the bot; you still run the
 > bot on a VPS/PC (see Running 24/7).
 
+## Market scanner
+
+Rank a watchlist of top large-caps by the same `structure_fib` logic the engine
+trades on, using **live crypto.com candles** (accurate to the exchange you trade on):
+
+```bash
+python scan.py                      # default watchlist
+python scan.py --instruments BTC_USDT ETH_USDT SOL_USDT
+```
+
+It prints each coin's trend, golden-pocket status, candle, entry/SL/TP1/TP2 and a
+0–100 confluence score, and highlights the most potential LONG setup — or says
+there is none (WAIT). The dashboard has the same as a **Scan Market** button.
+Because it runs where the bot runs (open network to crypto.com), the numbers match
+what the engine would act on — not a third-party indicator feed.
+
 ## Self-learning (walk-forward re-tuning)
 
 The bot can adapt its own parameters to recent market behavior — safely. The trap
